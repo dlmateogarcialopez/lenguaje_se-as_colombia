@@ -1,0 +1,44 @@
+# Python Virtual Environments
+venv/
+venv311/
+env/
+.env
+
+# Python Cache and Compiled Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Pipeline and Data Output Directories
+pipeline_output/
+*.npy
+*.pkl
+*.keras
+*.h5
+
+# Interim and Temporary Data
+lsc54_interim.csv
+master_normalized.csv
+test/
+temp/
+*.log
+
+# Raw Datasets
+LSC-54/
+lsc50/
+lsc70/
+lscs45/
+
+# Development and Local Configuration Files
+.vscode/
+.idea/
+.gemini/
+.agents/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Any WebApp local test artifacts
+webapp/lsc_motion_dummy.json
