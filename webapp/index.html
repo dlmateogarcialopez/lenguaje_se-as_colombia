@@ -1,87 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LSC Avatar VRM Motion Player</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #1a1a1a;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        #ui-container {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 15px 30px;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        button {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 8px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        button:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 14px;
-        }
-    </style>
-
-    <!-- Three.js (r128 for compatibility with @pixiv/three-vrm v0.6.x typically used with kalidokit) -->
-    <script src="https://unpkg.com/three@0.133.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://unpkg.com/three@0.133.0/examples/js/controls/OrbitControls.js"></script>
-
-    <!-- @pixiv/three-vrm v2.0 for VRM 1.0 models -->
-    <script src="https://unpkg.com/@pixiv/three-vrm@2.0.0/lib/three-vrm.js"></script>
-
-    <!-- Kalidokit -->
-    <script src="https://unpkg.com/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
+    <title>LSC VRM Player - Professional Edition</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Three.js and Plugins via CDN -->
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@1.0.8/lib/three-vrm.min.js"></script>
+    <!-- Kalidokit for Kinematics -->
+    <script src="https://unpkg.com/kalidokit@1.1/dist/kalidokit.umd.js"></script>
 </head>
 
 <body>
-    <div id="status">Cargando dependencias WebGL...</div>
 
-    <div id="ui-container">
-        <button id="btn-play">▶ Play / Loop</button>
-        <span id="frame-counter">Frame: 0 / 60</span>
-        <select id="sign-selector">
-            <option value="data">Dummy Loaded Sign</option>
-        </select>
+    <!-- Status Panel -->
+    <div id="status-panel" class="gui-panel">
+        <h1>LSC Motion Engine</h1>
+        <p id="status">Iniciando sistema...</p>
+        <div class="badge" id="sign-badge">Esperando...</div>
     </div>
 
-    <script defer src="app.js"></script>
+    <!-- Controls Panel -->
+    <div id="controls-panel" class="gui-panel">
+        <button id="btn-play">
+            <span id="play-icon">▶</span> <span id="btn-text">Play Motion</span>
+        </button>
+        <div id="frame-counter">Frame: 0 / 60</div>
+    </div>
+
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>

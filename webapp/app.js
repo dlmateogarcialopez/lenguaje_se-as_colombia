@@ -1,212 +1,236 @@
-// app.js
-// LSC Avatar VRM Motion Player
-// Maps 1629 dimension numpy features to VRM skeleton via Kalidokit
+// app.js - Professional LSC VRM Engine
+// Developed for High-Fidelity Sign Language Visualization
 
 let scene, camera, renderer, orbitControls, currentVrm;
 let isPlaying = false;
 let currentFrame = 0;
-let motionData = []; // Will hold the 60 frames of dictionary-mapped tensors
+let motionData = [];
 let clock = new THREE.Clock();
 
+// UI Elements (Modern Glassmorphism)
 const UI = {
     status: document.getElementById('status'),
     counter: document.getElementById('frame-counter'),
-    btnPlay: document.getElementById('btn-play')
+    btnPlay: document.getElementById('btn-play'),
+    btnText: document.getElementById('btn-text'),
+    playIcon: document.getElementById('play-icon'),
+    badge: document.getElementById('sign-badge')
 };
+
+// Bone Cache to avoid repeated .getBoneNode lookups (Performance)
+const boneCache = new Map();
 
 initThreeJS();
 loadVRM("https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm");
-// Nota: Usar un avatar de muestra estándar en formato raw desde Github CDN para el MVP para saltar la descarga local obligatoria.
 
 function initThreeJS() {
-    // 1. Scene
     scene = new THREE.Scene();
 
-    // 2. Camera
-    camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.4, 3.0);
+    // Camera optimized for upper body LSC view
+    camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0.0, 1.4, 2.5);
 
-    // 3. Renderer
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputEncoding = THREE.sRGBEncoding;
     document.body.appendChild(renderer.domElement);
 
-    // 4. Lights
-    const light = new THREE.DirectionalLight(0xffffff, 0.8);
-    light.position.set(1.0, 1.0, 1.0).normalize();
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    // Studio Lighting
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(1, 2, 3);
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-    // 5. Controls
     orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
-    orbitControls.screenSpacePanning = true;
-    orbitControls.target.set(0.0, 1.4, 0.0);
+    orbitControls.target.set(0, 1.3, 0); // Focus on chest/face
+    orbitControls.enableDamping = true;
     orbitControls.update();
 
     window.addEventListener('resize', onWindowResize);
 }
 
 function loadVRM(url) {
-    UI.status.innerText = "Cargando Avatar VRM...";
+    UI.status.innerText = "Sincronizando Avatar VRM...";
     const loader = new THREE.GLTFLoader();
-
-    // Install GLTFLoader plugin for VRM 1.0/2.x
-    loader.register((parser) => {
-        return new THREE.VRMLoaderPlugin(parser);
-    });
+    loader.register((parser) => new THREE.VRMLoaderPlugin(parser));
 
     loader.load(
         url,
         (gltf) => {
             const vrm = gltf.userData.vrm;
-            if (!vrm) {
-                console.error("No VRM structure found in loaded glTF.");
-                return;
-            }
-
             THREE.VRMUtils.removeUnnecessaryVertices(gltf.scene);
             THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
 
             scene.add(vrm.scene);
             currentVrm = vrm;
 
-            // Rotar para que mire hacia adelante (T-Pose ajustada)
+            // Pose Calibration: Face the camera (Flipped to Math.PI)
             vrm.scene.rotation.y = Math.PI;
-            vrm.scene.position.y = -0.1;
+            vrm.scene.position.y = -0.8;
+            window.currentVrm = vrm; // Expose for external tools/debugging
 
-            UI.status.innerText = "Avatar Cargado. Esperando Tensores de Movimiento...";
-
-            // Fetch our LSC data
+            UI.status.innerText = "Motor LSC Listo. Cargando secuencias...";
             fetchMotionData();
         },
-        (progress) => {
-            UI.status.innerText = `Cargando Avatar... ${Math.round((progress.loaded / progress.total) * 100)}%`;
-        },
-        (error) => {
-            console.error(error);
-            UI.status.innerText = "Error cargando Avatar.";
+        null,
+        (err) => {
+            console.error(err);
+            UI.status.innerText = "Falla Crítica: Error de Carga VRM.";
         }
     );
 }
 
-// ----------------------------------------------------
-// Mock Motion Data Fetching & Parsing 
-// ----------------------------------------------------
 async function fetchMotionData() {
     try {
-        UI.status.innerText = "Cargando Secuencia tensorial de LSC...";
         const response = await fetch('./lsc_motion_dummy.json');
+        if (!response.ok) throw new Error("Dataset no encontrado.");
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        const data = await response.json();
+        const rawFrames = data.frames || data;
 
-        motionData = await response.json(); // Array of 60 frames
-        UI.status.innerText = "Listo para reproducir.";
+        // --- EXPERT DATA MAPPING: Absolute Spatial Calibration ---
+        motionData = rawFrames.map(frame => {
+            const calibrate = (lm) => {
+                if (!lm) return null;
+                return lm.map(p => ({
+                    ...p,
+                    visibility: 1.0,
+                    // Map centered [-0.5, 0.5] to [0, 1] screen space
+                    x: (p.x || 0) + 0.5,
+                    y: (p.y || 0) + 0.5,
+                    z: (p.z || 0)
+                }));
+            };
+            return {
+                pose: calibrate(frame.poseLandmarks || frame.pose),
+                pose3d: calibrate(frame.pose3DLandmarks || frame.pose3d),
+                leftHand: calibrate(frame.leftHandLandmarks || frame.leftHand),
+                rightHand: calibrate(frame.rightHandLandmarks || frame.rightHand),
+                face: calibrate(frame.faceLandmarks || frame.face)
+            };
+        });
+
+        UI.status.innerText = "Secuencia Tensorial Cargada.";
+        UI.badge.innerText = data.label || "LSC Capturado";
 
         UI.btnPlay.addEventListener('click', () => {
             isPlaying = !isPlaying;
-            UI.btnPlay.innerText = isPlaying ? "⏸ Pause" : "▶ Play / Loop";
+            UI.btnText.innerText = isPlaying ? "Pause Engine" : "Play Motion";
+            UI.playIcon.innerText = isPlaying ? "⏸" : "▶";
         });
 
-        // Empezar loop 
         animate();
-
     } catch (e) {
-        console.error("No dummy JSON found. Creating procedural mock for demonstration structure.", e);
-        // Si no hay archivo JSON generado, generaremos ruido para que el usuario pueda ver
-        // que la estructura de Kalidokit existe y el canvas renderiza vivo.
-        motionData = setupProceduralMockData();
-        UI.status.innerText = "Listo (Modo Mock)";
-        UI.btnPlay.addEventListener('click', () => {
-            isPlaying = !isPlaying;
-            UI.btnPlay.innerText = isPlaying ? "⏸ Pause" : "▶ Play / Loop";
+        console.error(e);
+        UI.status.innerText = "Error: Sin datos de movimiento.";
+    }
+}
+
+function animateRig(frame) {
+    if (!currentVrm || !frame) return;
+
+    // --- KALIDOKIT SOLVE: High Precision ---
+    const poseRig = Kalidokit.Pose.solve(frame.pose, frame.pose3d, {
+        runtime: "mediapipe", video: { width: 640, height: 480 }
+    });
+    const rightHandRig = Kalidokit.Hand.solve(frame.rightHand, "Right");
+    const leftHandRig = Kalidokit.Hand.solve(frame.leftHand, "Left");
+    const faceRig = Kalidokit.Face.solve(frame.face, {
+        runtime: "mediapipe", video: { width: 640, height: 480 }
+    });
+
+    // 1. Rig Head/Face
+    if (faceRig) {
+        rigRotation("head", faceRig.head, 1, 0.5);
+    }
+
+    // 2. Rig Body (Pose)
+    if (poseRig) {
+        // Hips Position (Center of gravity)
+        if (poseRig.Hips && poseRig.Hips.position) {
+            rigPosition("hips", {
+                x: -poseRig.Hips.position.x * 2,
+                y: poseRig.Hips.position.y + 0.9,
+                z: -poseRig.Hips.position.z
+            }, 1, 0.1);
+        }
+        rigRotation("spine", poseRig.Spine, 1, 0.2);
+
+        // Arms (Symmetry Fix)
+        rigRotation("rightUpperArm", poseRig.RightUpperArm, 1, 0.3);
+        rigRotation("rightLowerArm", poseRig.RightLowerArm, 1, 0.3);
+        rigRotation("leftUpperArm", poseRig.LeftUpperArm, 1, 0.3);
+        rigRotation("leftLowerArm", poseRig.LeftLowerArm, 1, 0.3);
+    }
+
+    // 3. Rig Hands (Detail)
+    if (rightHandRig) rigHand(rightHandRig, "right");
+    if (leftHandRig) rigHand(leftHandRig, "left");
+}
+
+function rigHand(handRig, side) {
+    const prefix = side === "right" ? "right" : "left";
+    const wrist = side === "right" ? handRig.RightWrist : handRig.LeftWrist;
+
+    rigRotation(`${prefix}Hand`, wrist, 1, 0.4);
+
+    // Explicit Finger Mapping
+    ["Thumb", "Index", "Middle", "Ring", "Little"].forEach(finger => {
+        ["Proximal", "Intermediate", "Distal"].forEach(joint => {
+            const rigProp = `${side.charAt(0).toUpperCase() + side.slice(1)}${finger}${joint}`;
+            if (handRig[rigProp]) {
+                rigRotation(`${prefix}${finger}${joint}`, handRig[rigProp], 1, 0.5);
+            }
         });
-        animate();
-    }
-}
-
-// ----------------------------------------------------
-// Kalidokit Rigging y Render Loop
-// ----------------------------------------------------
-function animateRig(frameData) {
-    if (!currentVrm || !frameData) return;
-
-    // Calculate IK mathematically based on MediaPipe structural array
-    const poseRig = Kalidokit.Pose.solve(frameData.poseLandmarks, frameData.pose3DLandmarks, {
-        runtime: "mediapipe", video: { width: 640, height: 480 }
     });
-    const rightHandRig = Kalidokit.Hand.solve(frameData.rightHandLandmarks, "Right");
-    const leftHandRig = Kalidokit.Hand.solve(frameData.leftHandLandmarks, "Left");
-    const faceRig = Kalidokit.Face.solve(frameData.faceLandmarks, {
-        runtime: "mediapipe", video: { width: 640, height: 480 }
-    });
+}
 
-    rigRotation("Head", poseRig.Head.y, poseRig.Head.x, poseRig.Head.z);
+function rigRotation(boneName, rot, damp = 1, lerp = 0.3) {
+    if (!rot) return;
+    if (isNaN(rot.x) || isNaN(rot.y) || isNaN(rot.z)) return;
 
-    // Apply pose to Hips/Spine
-    rigPosition("Hips", {
-        x: -poseRig.Hips.position.x,
-        y: poseRig.Hips.position.y + 1,
-        z: -poseRig.Hips.position.z
-    }, 1, 0.07);
-
-    rigRotation("Spine", poseRig.Spine.y, poseRig.Spine.x, poseRig.Spine.z);
-
-    // Apply Arm IK
-    rigRotation("RightUpperArm", poseRig.RightUpperArm.y, poseRig.RightUpperArm.x, poseRig.RightUpperArm.z);
-    rigRotation("RightLowerArm", poseRig.RightLowerArm.y, poseRig.RightLowerArm.x, poseRig.RightLowerArm.z);
-    rigRotation("LeftUpperArm", poseRig.LeftUpperArm.y, poseRig.LeftUpperArm.x, poseRig.LeftUpperArm.z);
-    rigRotation("LeftLowerArm", poseRig.LeftLowerArm.y, poseRig.LeftLowerArm.x, poseRig.LeftLowerArm.z);
-
-    // Apply Hand IK
-    if (rightHandRig) {
-        rigRotation("RightHand", rightHandRig.RightWrist.y, rightHandRig.RightWrist.x, rightHandRig.RightWrist.z);
-        rigRotation("RightRingProximal", rightHandRig.RightRingProximal.y, rightHandRig.RightRingProximal.x, rightHandRig.RightRingProximal.z);
-        rigRotation("RightRingIntermediate", rightHandRig.RightRingIntermediate.y, rightHandRig.RightRingIntermediate.x, rightHandRig.RightRingIntermediate.z);
-        rigRotation("RightRingDistal", rightHandRig.RightRingDistal.y, rightHandRig.RightRingDistal.x, rightHandRig.RightRingDistal.z);
-        rigRotation("RightIndexProximal", rightHandRig.RightIndexProximal.y, rightHandRig.RightIndexProximal.x, rightHandRig.RightIndexProximal.z);
-        // ... (resto omitido por brevedad para el index de prueba, Kalidokit mapea a cada hueso).
+    let bone = boneCache.get(boneName);
+    if (!bone) {
+        bone = currentVrm.humanoid.getNormalizedBoneNode ?
+            currentVrm.humanoid.getNormalizedBoneNode(boneName) :
+            currentVrm.humanoid.getBoneNode(boneName);
+        if (bone) boneCache.set(boneName, bone);
     }
 
-    if (leftHandRig) {
-        rigRotation("LeftHand", leftHandRig.LeftWrist.y, leftHandRig.LeftWrist.x, leftHandRig.LeftWrist.z);
+    if (!bone) return;
+
+    const euler = new THREE.Euler(rot.x * damp, rot.y * damp, rot.z * damp, rot.rotationOrder || 'XYZ');
+    const quat = new THREE.Quaternion().setFromEuler(euler);
+    bone.quaternion.slerp(quat, lerp);
+}
+
+function rigPosition(boneName, pos, damp = 1, lerp = 0.3) {
+    if (!pos) return;
+    if (isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return;
+
+    let bone = boneCache.get(boneName);
+    if (!bone) {
+        bone = currentVrm.humanoid.getNormalizedBoneNode ?
+            currentVrm.humanoid.getNormalizedBoneNode(boneName) :
+            currentVrm.humanoid.getBoneNode(boneName);
+        if (bone) boneCache.set(boneName, bone);
     }
+
+    if (!bone) return;
+
+    const vec = new THREE.Vector3(pos.x * damp, pos.y * damp, pos.z * damp);
+    bone.position.lerp(vec, lerp);
 }
 
-// Helpers
-function rigRotation(name, x = 0, y = 0, z = 0, dampener = 1, lerpAmount = 0.3) {
-    if (!currentVrm) return;
-    const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
-    if (!Part) return;
-
-    let euler = new THREE.Euler(x * dampener, y * dampener, z * dampener, 'XYZ');
-    let quaternion = new THREE.Quaternion().setFromEuler(euler);
-    Part.quaternion.slerp(quaternion, lerpAmount); // Slerp for smooth transition between 60 fps static slices
-}
-
-function rigPosition(name, position, dampener = 1, lerpAmount = 0.3) {
-    if (!currentVrm) return;
-    const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
-    if (!Part) return;
-
-    let vector = new THREE.Vector3(position.x * dampener, position.y * dampener, position.z * dampener);
-    Part.position.lerp(vector, lerpAmount);
-}
-
-// Animation Frame Loop
-let lastTime = 0;
 function animate(time) {
     requestAnimationFrame(animate);
 
-    // We update VRM
     if (currentVrm) {
         currentVrm.update(clock.getDelta());
     }
 
-    // If playing, advance frame array every ~33ms (approx 30fps)
-    if (isPlaying && (time - lastTime > 33)) {
+    if (isPlaying && (time - lastTime > 40)) { // ~25 FPS for LSC clarity
         if (motionData.length > 0) {
             animateRig(motionData[currentFrame]);
             currentFrame = (currentFrame + 1) % motionData.length;
@@ -215,32 +239,13 @@ function animate(time) {
         lastTime = time;
     }
 
+    orbitControls.update();
     renderer.render(scene, camera);
 }
 
+let lastTime = 0;
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// ----------------------------------------------------
-// Fallback Dummy procedural
-// ----------------------------------------------------
-function setupProceduralMockData() {
-    let mockFrames = [];
-    for (let i = 0; i < 60; i++) {
-        let pos = Math.sin(i * 0.1) * 0.5;
-        let mockHead = [{ x: 0, y: 0.1, z: 0 }];
-        let mockPose = [];
-        for (let j = 0; j < 33; j++) { mockPose.push({ x: pos, y: pos, z: 0, visibility: 1 }); }
-        mockFrames.push({
-            poseLandmarks: mockPose,
-            pose3DLandmarks: mockPose,
-            rightHandLandmarks: mockPose.slice(0, 21),
-            leftHandLandmarks: mockPose.slice(0, 21),
-            faceLandmarks: mockPose.concat(mockPose)
-        });
-    }
-    return mockFrames;
 }

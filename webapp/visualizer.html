@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSC Visualizer — Lengua de Señas Colombiana</title>
+    <meta name="description"
+        content="Visualizador profesional de Lengua de Señas Colombiana con esqueleto animado y avatar 3D.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js + VRM -->
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@1.0.8/lib/three-vrm.min.js"></script>
+    <script src="https://unpkg.com/kalidokit@1.1/dist/kalidokit.umd.js"></script>
+    <style>
+        :root {
+            --accent: #00EDDA;
+            --accent2: #7B5EA7;
+            --bg: #07070f;
+            --panel: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #e8eaf6;
+            --skeleton-body: #00EDDA;
+            --skeleton-rhand: #ff6b6b;
+            --skeleton-lhand: #6bcbff;
+            --skeleton-face: #c0f566;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Outfit', sans-serif;
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── TOP BAR ─────────────────────────────────────── */
+        #topbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        #topbar h1 {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #input-row {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+        }
+
+        #text-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            padding: 8px 14px;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        #text-input:focus {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        #btn-translate {
+            background: linear-gradient(135deg, var(--accent), #00a8ff);
+            color: #000;
+        }
+
+        #btn-translate:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(0, 237, 218, 0.4);
+        }
+
+        #btn-play {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid var(--border);
+        }
+
+        #btn-stop {
+            background: rgba(255, 100, 100, 0.1);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 100, 100, 0.2);
+        }
+
+        #mode-toggle {
+            background: rgba(123, 94, 167, 0.3);
+            color: var(--accent2);
+            border: 1px solid var(--accent2);
+            font-size: 13px;
+        }
+
+        #status-bar {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            white-space: nowrap;
+            min-width: 180px;
+        }
+
+        /* ── MAIN LAYOUT ──────────────────────────────────── */
+        #main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── SKELETON PANEL ───────────────────────────────── */
+        #skeleton-panel {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, rgba(0, 237, 218, 0.03) 0%, #07070f 70%);
+            border-right: 1px solid var(--border);
+        }
+
+        #skeleton-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .panel-label {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--accent);
+            pointer-events: none;
+        }
+
+        /* ── AVATAR PANEL ─────────────────────────────────── */
+        #avatar-panel {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, rgba(123, 94, 167, 0.05) 0%, #07070f 70%);
+        }
+
+        #avatar-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* ── BOTTOM INFO BAR ──────────────────────────────── */
+        #bottombar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 16px;
+        }
+
+        #gloss-display {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .gloss-chip {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .gloss-chip.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        #frame-info {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        #vocab-chips {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            max-width: 500px;
+        }
+
+        .vocab-chip {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            background: rgba(123, 94, 167, 0.2);
+            border: 1px solid rgba(123, 94, 167, 0.4);
+            cursor: pointer;
+            transition: all 0.15s;
+            color: #c0a8ee;
+        }
+
+        .vocab-chip:hover {
+            background: rgba(123, 94, 167, 0.5);
+        }
+
+        /* ── LEGEND ───────────────────────────────────────── */
+        #legend {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            pointer-events: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* ── ERROR ────────────────────────────────────────── */
+        #error-msg {
+            background: rgba(255, 80, 80, 0.15);
+            border: 1px solid rgba(255, 80, 80, 0.3);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: #ff8080;
+            display: none;
+        }
+
+        /* ── LOADING SPINNER ──────────────────────────────── */
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(0, 237, 218, 0.2);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin {
+            to {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+
+        #vrm-loading {
+            display: block;
+        }
+
+        /* ── VIDEO PANEL ──────────────────────────────────── */
+        #video-panel {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(ellipse at center, rgba(255, 200, 50, 0.04) 0%, #07070f 70%);
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #video-panel .panel-label {
+            color: #ffd700;
+        }
+
+        #video-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #real-video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+            border-radius: 8px;
+        }
+
+        #video-placeholder {
+            text-align: center;
+            opacity: 0.5;
+            padding: 20px;
+        }
+
+        .placeholder-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .placeholder-text {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .placeholder-sub {
+            font-size: 12px;
+            opacity: 0.6;
+        }
+
+        #video-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .spinner-small {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 215, 0, 0.2);
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        #video-error {
+            color: #ff8080;
+            font-size: 13px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #video-gloss-badge {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 215, 0, 0.15);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 20px;
+            padding: 4px 16px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffd700;
+            letter-spacing: 1px;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- TOP BAR -->
+    <div id="topbar">
+        <h1>🤟 LSC Visualizer</h1>
+        <div id="input-row">
+            <input id="text-input" type="text" placeholder="Escribe texto en español...">
+            <button id="btn-translate" class="btn">🔄 Traducir</button>
+            <button id="btn-play" class="btn">▶ Play</button>
+            <button id="btn-stop" class="btn">⏹ Stop</button>
+            <button id="mode-toggle" class="btn">📊 Solo Esqueleto</button>
+        </div>
+        <div id="status-bar">Iniciando...</div>
+        <div id="error-msg"></div>
+    </div>
+
+    <!-- MAIN AREA: three panels side by side -->
+    <div id="main">
+        <!-- SKELETON PANEL -->
+        <div id="skeleton-panel">
+            <div class="panel-label" id="skeleton-panel-label">🦴 Esqueleto de Movimiento (LSC50)</div>
+            <canvas id="skeleton-canvas"></canvas>
+            <!-- Legend -->
+            <div id="legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--skeleton-body)"></div>Cuerpo / Columna
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--skeleton-rhand)"></div>Mano Derecha
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--skeleton-lhand)"></div>Mano Izquierda
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--skeleton-face)"></div>Rostro
+                </div>
+            </div>
+        </div>
+
+        <!-- REAL VIDEO PANEL -->
+        <div id="video-panel">
+            <div class="panel-label" id="video-panel-label">🎥 Video Real — LSC50</div>
+            <div id="video-wrapper">
+                <div id="video-placeholder">
+                    <div class="placeholder-icon">🤟</div>
+                    <div class="placeholder-text">Selecciona una seña del vocabulario<br>para ver el video original
+                    </div>
+                    <div class="placeholder-sub">o traduce texto para iniciar</div>
+                </div>
+                <video id="real-video" autoplay loop muted playsinline style="display:none">
+                    Tu navegador no soporta video HTML5.
+                </video>
+                <div id="video-loading" style="display:none">
+                    <div class="spinner-small"></div>
+                    <span>Cargando video...</span>
+                </div>
+                <div id="video-error" style="display:none">
+                    <span>⚠️ Video no disponible</span>
+                </div>
+            </div>
+            <div id="video-gloss-badge"></div>
+        </div>
+
+        <!-- AVATAR CANVAS PANEL -->
+        <div id="avatar-panel">
+            <div class="panel-label" style="color:var(--accent2)">🎨 Avatar Animado</div>
+            <canvas id="avatar-canvas"></canvas>
+        </div>
+    </div>
+
+    <!-- BOTTOM BAR -->
+    <div id="bottombar">
+        <div id="gloss-display"></div>
+        <div id="vocab-chips"></div>
+        <div id="frame-info">Frame: — / —</div>
+    </div>
+
+    <script src="visualizer_app.js?v=7"></script>
+</body>
+
+</html>

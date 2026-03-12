@@ -1,0 +1,166 @@
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --accent: #00f2ff;
+    --text: #ffffff;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Outfit', sans-serif;
+    color: var(--text);
+}
+
+canvas {
+    display: block;
+}
+
+#avatar-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+#blue-circle {
+    position: absolute;
+    bottom: 25vh;
+    /* Position at feet level */
+    left: 50%;
+    transform: translate(-50%, 50%) scale(1);
+    width: 60vh;
+    height: 20vh;
+    /* Ellipse for perspective */
+    background: radial-gradient(ellipse, rgba(0, 242, 255, 0.7) 0%, rgba(0, 0, 0, 0) 80%);
+    border-radius: 50%;
+    z-index: 0;
+    pointer-events: none;
+    box-shadow: 0 0 120px rgba(0, 242, 255, 0.4);
+    filter: blur(15px);
+    animation: pulse 4s infinite ease-in-out;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: translate(-50%, 50%) scale(1);
+        opacity: 0.6;
+    }
+
+    50% {
+        transform: translate(-50%, 50%) scale(1.1);
+        opacity: 0.9;
+    }
+}
+
+/* Glass UI Panels */
+.gui-panel {
+    position: absolute;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+    pointer-events: auto;
+    z-index: 10;
+}
+
+#status-panel {
+    top: 20px;
+    left: 20px;
+    min-width: 250px;
+}
+
+#controls-panel {
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 400px;
+    justify-content: center;
+}
+
+h1 {
+    margin: 0 0 5px 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--accent);
+    text-transform: uppercase;
+}
+
+p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-top: 10px;
+}
+
+/* Buttons */
+button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.3);
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+#frame-counter {
+    font-variant-numeric: tabular-nums;
+    font-weight: 300;
+    font-size: 0.9rem;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: 10px;
+}

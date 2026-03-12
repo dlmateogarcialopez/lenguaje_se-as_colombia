@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSC Translator — Texto a Lengua de Señas Colombiana</title>
+    <meta name="description"
+        content="Traduce texto en español a Lengua de Señas Colombiana animada en 3D con inteligencia artificial.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=3">
+    <!-- Three.js -->
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@1.0.8/lib/three-vrm.min.js"></script>
+    <script src="https://unpkg.com/kalidokit@1.1/dist/kalidokit.umd.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Outfit', sans-serif;
+            color: #fff;
+        }
+
+        #avatar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        #blue-circle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 75vh;
+            height: 75vh;
+            background: radial-gradient(circle, rgba(0, 242, 255, 0.6) 0%, rgba(0, 0, 0, 0) 70%);
+            border-radius: 50%;
+            z-index: 0;
+            pointer-events: none;
+            box-shadow: 0 0 150px rgba(0, 242, 255, 0.4);
+            filter: blur(20px);
+        }
+
+        /* Glass UI Panels */
+        .gui-panel {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            z-index: 10;
+        }
+
+        #avatar-info {
+            top: 20px;
+            left: 20px;
+            width: 280px;
+        }
+
+        #translator-panel {
+            top: 20px;
+            right: 20px;
+            width: 320px;
+        }
+
+        #bottom-controls {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            min-width: 400px;
+            justify-content: center;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            color: #00f2ff;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        textarea#text-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            padding: 15px;
+            resize: none;
+            height: 100px;
+            outline: none;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        button {
+            background: #00f2ff;
+            color: #000;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: inherit;
+            width: 100%;
+            justify-content: center;
+        }
+
+        button:hover {
+            box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .badge {
+            background: #00f2ff;
+            color: #000;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        #glosses-display {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .gloss-tag {
+            background: rgba(0, 242, 255, 0.15);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            color: #00f2ff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .gloss-tag.active {
+            background: #00f2ff;
+            color: #000;
+        }
+
+        #vocab-panel {
+            position: absolute;
+            top: 250px;
+            left: 20px;
+            width: 280px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .vocab-word {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 8px;
+            margin: 3px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .vocab-word:hover {
+            background: rgba(0, 242, 255, 0.3);
+        }
+
+        .error-msg {
+            color: #ff5555;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="avatar-container">
+        <div id="blue-circle"></div>
+        <!-- Canvas will be injected here by JS -->
+    </div>
+
+    <div id="avatar-info" class="gui-panel">
+        <h1>🤟 LSC AUDIO ENGINE</h1>
+        <p id="status">Cargando...</p>
+        <div class="badge" id="current-gloss">LISTO</div>
+    </div>
+
+    <div id="translator-panel" class="gui-panel">
+        <h1>📝 TEXTO → LSC</h1>
+        <textarea id="text-input" placeholder="Escribe en español..."></textarea>
+        <button id="btn-translate">🔄 Traducir y Animar</button>
+        <div id="glosses-display"></div>
+        <div id="error-msg" class="error-msg" style="display:none"></div>
+    </div>
+
+    <div id="vocab-panel" class="gui-panel" style="display:none">
+        <p style="margin-bottom:10px; opacity:0.7; font-size:0.8rem;">Vocabulario disponible:</p>
+        <div id="vocab-words"></div>
+    </div>
+
+    <div id="bottom-controls" class="gui-panel">
+        <button id="btn-play" style="width:auto">▶ Play</button>
+        <button id="btn-stop" style="width:auto; background:rgba(255,255,255,0.2); color:#fff">⏹ Stop</button>
+        <div id="frame-counter" style="font-family:monospace">Frame: 0 / —</div>
+    </div>
+
+    <script type="module" src="translator_app.js?v=3"></script>
+</body>
+
+</html>
