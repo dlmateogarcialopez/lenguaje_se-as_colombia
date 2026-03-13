@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
     <script src="https://unpkg.com/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://unpkg.com/@pixiv/three-vrm@1.0.8/lib/three-vrm.min.js"></script>
+    <!-- Kalidokit for hands/face -->
     <script src="https://unpkg.com/kalidokit@1.1/dist/kalidokit.umd.js"></script>
     <style>
         :root {
@@ -183,19 +183,23 @@
         #avatar-panel {
             flex: 1;
             position: relative;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
             background: radial-gradient(ellipse at center, rgba(123, 94, 167, 0.05) 0%, #07070f 70%);
         }
 
-        #avatar-canvas {
+        #avatar-panel .panel-label {
+            position: absolute;
+            top: 10px;
+            left: 14px;
+            z-index: 10;
+        }
+
+        #avatar-container {
+            width: 100%;
+            height: 100%;
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
+            overflow: hidden;
         }
 
         /* ── BOTTOM INFO BAR ──────────────────────────────── */
@@ -479,10 +483,12 @@
             <div id="video-gloss-badge"></div>
         </div>
 
-        <!-- AVATAR CANVAS PANEL -->
+        <!-- AVATAR 3D PANEL -->
         <div id="avatar-panel">
-            <div class="panel-label" style="color:var(--accent2)">🎨 Avatar Animado</div>
-            <canvas id="avatar-canvas"></canvas>
+            <div class="panel-label" style="color:var(--accent2)">🤖 Avatar 3D (Realista)</div>
+            <div id="avatar-container">
+                <div class="spinner" id="vrm-loading"></div>
+            </div>
         </div>
     </div>
 
@@ -493,7 +499,7 @@
         <div id="frame-info">Frame: — / —</div>
     </div>
 
-    <script src="visualizer_app.js?v=7"></script>
+    <script src="visualizer_app.js?v=8"></script>
 </body>
 
 </html>

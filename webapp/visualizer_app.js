@@ -1,7 +1,7 @@
-// visualizer_app.js — LSC Triple-Mode Visualizer v3.0
+// visualizer_app.js — LSC Triple-Mode Visualizer v4.0 (3D Avatar)
 // Panel 1: Skeleton canvas  — MediaPipe landmarks in real time
 // Panel 2: Real signer video — original LSC50 dataset
-// Panel 3: Canvas avatar    — direct landmark rendering (guaranteed sync)
+// Panel 3: 3D Avatar (Three.js WebGL & RPM GLB) with Quaternion IK
 
 'use strict';
 
@@ -31,8 +31,14 @@ const UI = {
     avatarPanel: document.getElementById('avatar-panel'),
 };
 
-// View mode: 'both' | 'skeleton' | 'video' | 'avatar'
-let viewMode = 'both';
+// View mode: 'skeleton' | 'both' | 'video' | 'avatar'
+let viewMode = 'skeleton';
+
+// ═══ THREE.JS & AVATAR GLOBALS ═════════════════════════════════════════════════
+let scene, camera, renderer, orbitControls;
+let currentAvatar = null;
+let avatarBones = {};
+const headMesh = []; // For facial morphs
 
 // ═══ SKELETON CANVAS COLORS ════════════════════════════════════════════════════
 const COLORS = {
@@ -46,32 +52,23 @@ const COLORS = {
 
 // MediaPipe Pose connections: [from, to]
 const POSE_CONNECTIONS = [
-    // Head
     [0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8],
-    // Shoulders → hips
     [11, 12], [11, 23], [12, 24], [23, 24],
-    // Left arm
-    [11, 13], [13, 15],
-    // Right arm
-    [12, 14], [14, 16],
-    // Left hand (from wrist)
+    [11, 13], [13, 15], [12, 14], [14, 16],
     [15, 17], [15, 19], [15, 21], [17, 19],
-    // Right hand (from wrist)
     [16, 18], [16, 20], [16, 22], [18, 20],
-    // Left leg
     [23, 25], [25, 27], [27, 29], [27, 31], [29, 31],
-    // Right leg
     [24, 26], [26, 28], [28, 30], [28, 32], [30, 32],
 ];
 
 // MediaPipe Hand connections (21 landmarks)
 const HAND_CONNECTIONS = [
-    [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
-    [0, 5], [5, 6], [6, 7], [7, 8],       // Index
-    [0, 9], [9, 10], [10, 11], [11, 12],  // Middle
-    [0, 13], [13, 14], [14, 15], [15, 16],// Ring
-    [0, 17], [17, 18], [18, 19], [19, 20],// Little
-    [5, 9], [9, 13], [13, 17],          // Palm
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [0, 9], [9, 10], [10, 11], [11, 12],
+    [0, 13], [13, 14], [14, 15], [15, 16],
+    [0, 17], [17, 18], [18, 19], [19, 20],
+    [5, 9], [9, 13], [13, 17],
 ];
 
 // ═══ CANVAS SETUP & RESIZE ══════════════════════════════════════════════════════
@@ -85,12 +82,9 @@ function resizeCanvas() {
     }
 }
 
-// Use ResizeObserver for reliable sizing after layout
 const skPanel = document.getElementById('skeleton-panel');
 const ro = new ResizeObserver(() => resizeCanvas());
 ro.observe(skPanel);
-
-// Also call after first paint
 requestAnimationFrame(() => { resizeCanvas(); });
 window.addEventListener('resize', resizeCanvas);
 
@@ -100,32 +94,17 @@ function drawSkeleton(frame) {
     const H = skCanvas.height;
     ctx.clearRect(0, 0, W, H);
 
-    // Background glow
     const radGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.min(W, H) * 0.5);
     radGrad.addColorStop(0, 'rgba(0,237,218,0.04)');
     radGrad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = radGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // ── BODY POSE ──────────────────────────────────────────────────────────────
-    const pose = frame.poseLandmarks;
-    if (pose && pose.length > 0) {
-        drawPoseSkeleton(pose, W, H);
-    }
+    if (frame.poseLandmarks && frame.poseLandmarks.length > 0) drawPoseSkeleton(frame.poseLandmarks, W, H);
+    if (frame.faceLandmarks && frame.faceLandmarks.length > 0) drawFace(frame.faceLandmarks, W, H);
+    if (frame.rightHandLandmarks && frame.rightHandLandmarks.length > 0) drawHand(frame.rightHandLandmarks, COLORS.rhand, W, H);
+    if (frame.leftHandLandmarks && frame.leftHandLandmarks.length > 0) drawHand(frame.leftHandLandmarks, COLORS.lhand, W, H);
 
-    // ── FACE ───────────────────────────────────────────────────────────────────
-    const face = frame.faceLandmarks;
-    if (face && face.length > 0) {
-        drawFace(face, W, H);
-    }
-
-    // ── HANDS ──────────────────────────────────────────────────────────────────
-    const rh = frame.rightHandLandmarks;
-    const lh = frame.leftHandLandmarks;
-    if (rh && rh.length > 0) drawHand(rh, COLORS.rhand, W, H);
-    if (lh && lh.length > 0) drawHand(lh, COLORS.lhand, W, H);
-
-    // Gloss label
     if (frame.gloss) {
         ctx.font = 'bold 22px Outfit, sans-serif';
         ctx.fillStyle = COLORS.body;
@@ -137,21 +116,18 @@ function drawSkeleton(frame) {
 }
 
 function mapLM(lm, W, H, padX = 0.08, padY = 0.05) {
-    // Map landmark x,y from [0,1] to canvas, with padding
     const x = (padX + lm.x * (1 - 2 * padX)) * W;
     const y = (padY + lm.y * (1 - 2 * padY)) * H;
     return { x, y };
 }
 
 function drawPoseSkeleton(landmarks, W, H) {
-    // Connections
     POSE_CONNECTIONS.forEach(([a, b]) => {
         const lmA = landmarks[a], lmB = landmarks[b];
         if (!lmA || !lmB) return;
         const pA = mapLM(lmA, W, H);
         const pB = mapLM(lmB, W, H);
 
-        // Color segments by body zone
         let color = COLORS.body;
         if ((a >= 11 && a <= 16) || (b >= 11 && b <= 16)) color = COLORS.body;
         if (a >= 23 || b >= 23) color = COLORS.spine;
@@ -166,7 +142,6 @@ function drawPoseSkeleton(landmarks, W, H) {
         ctx.globalAlpha = 1;
     });
 
-    // Joints
     landmarks.forEach((lm, i) => {
         if (!lm) return;
         const p = mapLM(lm, W, H);
@@ -174,10 +149,9 @@ function drawPoseSkeleton(landmarks, W, H) {
         const r = isKeyJoint ? 7 : 4;
 
         let col = COLORS.body;
-        if (i <= 10) col = COLORS.face;          // face
-        if (i >= 23) col = COLORS.spine;          // legs
+        if (i <= 10) col = COLORS.face;
+        if (i >= 23) col = COLORS.spine;
 
-        // Glow effect
         ctx.shadowColor = col;
         ctx.shadowBlur = isKeyJoint ? 14 : 6;
         ctx.beginPath();
@@ -186,7 +160,6 @@ function drawPoseSkeleton(landmarks, W, H) {
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // Labels for key joints
         if (isKeyJoint) {
             const labels = {
                 11: 'L.Sh', 12: 'R.Sh', 13: 'L.El', 14: 'R.El',
@@ -205,8 +178,6 @@ function drawPoseSkeleton(landmarks, W, H) {
 }
 
 function drawHand(landmarks, color, W, H) {
-    // Determine offset: hands in mediapipe are 0-1 relative
-    // We overlay them near where wrist landmark is
     HAND_CONNECTIONS.forEach(([a, b]) => {
         const lmA = landmarks[a], lmB = landmarks[b];
         if (!lmA || !lmB) return;
@@ -237,27 +208,13 @@ function drawHand(landmarks, color, W, H) {
 }
 
 function drawFace(landmarks, W, H) {
-    // Draw a simplified face contour — just key face landmarks
-    // MediaPipe Face: 468 landmarks, we draw a sampled set
-    const keyIndices = [
-        10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
-        397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
-        172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
-        // eyes
-        33, 7, 163, 144, 145, 153, 154, 155, 133, 246, 161, 160, 159, 158, 157, 173,
-        362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398,
-        // mouth
-        61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146,
-    ];
-
     ctx.globalAlpha = 0.35;
-    keyIndices.forEach(i => {
-        const lm = landmarks[i];
+    ctx.fillStyle = COLORS.face;
+    landmarks.forEach(lm => {
         if (!lm) return;
         const p = mapLM(lm, W, H);
         ctx.beginPath();
         ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = COLORS.face;
         ctx.fill();
     });
     ctx.globalAlpha = 1;
@@ -270,11 +227,8 @@ function animLoop(time) {
     if (isPlaying && motionData.length > 0 && (time - lastTime > FRAME_MS)) {
         const frame = motionData[currentFrame];
         if (frame) {
-            // Draw skeleton
             if (viewMode !== 'avatar' && viewMode !== 'video') drawSkeleton(frame);
-            // Draw canvas avatar (replaces VRM)
-            if (viewMode !== 'skeleton' && viewMode !== 'video') drawAvatar(frame);
-            // Update gloss UI
+            if (viewMode !== 'skeleton' && viewMode !== 'video') animateAvatar(frame);
             if (frame.gloss) highlightGloss(frame.gloss);
             UI.frameInfo.innerText = `Frame: ${currentFrame + 1} / ${motionData.length}`;
         }
@@ -284,309 +238,189 @@ function animLoop(time) {
 }
 requestAnimationFrame(animLoop);
 
-// ═══ AVATAR CANVAS SETUP ══════════════════════════════════════════════════════
-const avCanvas = document.getElementById('avatar-canvas');
-const avCtx = avCanvas.getContext('2d');
+// ═══ CUSTOM ROBUST 3D KINEMATICS ENGINE (QUATERNION IK) ══════════════════════
+function aimBone(bone, worldDirVector, defaultLocalDir = new THREE.Vector3(1, 0, 0)) {
+    if (!bone || worldDirVector.lengthSq() < 0.0001) return;
+    const parentRot = new THREE.Quaternion();
+    if (bone.parent) bone.parent.getWorldQuaternion(parentRot);
+    parentRot.invert();
 
-const avPanel = document.getElementById('avatar-panel');
-const avRO = new ResizeObserver(() => resizeAvatarCanvas());
-avRO.observe(avPanel);
-
-function resizeAvatarCanvas() {
-    const w = avPanel.offsetWidth, h = avPanel.offsetHeight;
-    if (w > 0 && h > 0) { avCanvas.width = w; avCanvas.height = h; }
-}
-requestAnimationFrame(() => resizeAvatarCanvas());
-
-// ═══ AVATAR RENDERING ENGINE ══════════════════════════════════════════════════
-// Draws a stylized human figure directly from MediaPipe landmarks.
-// This guarantees EXACT sync with the skeleton panel and the real video.
-
-const AV = {
-    skin: '#d4956a',
-    skinD: '#b57a50',
-    shirt: '#8B5CF6',
-    shirtD: '#6D28D9',
-    pants: '#1e293b',
-    pantsD: '#0f172a',
-    rHand: '#ff9f8b',
-    lHand: '#8bc4ff',
-    face: '#e8b89a',
-    faceD: '#c49278',
-};
-
-function avMap(lm, W, H, padX = 0.06, padY = 0.04) {
-    const x = (padX + lm.x * (1 - 2 * padX)) * W;
-    const y = (padY + lm.y * (1 - 2 * padY)) * H;
-    return { x, y };
+    // Transform target world direction into the bone's local space
+    const localTargetDir = worldDirVector.clone().applyQuaternion(parentRot).normalize();
+    const qTarget = new THREE.Quaternion().setFromUnitVectors(defaultLocalDir, localTargetDir);
+    bone.quaternion.slerp(qTarget, 0.85); // Smooth interpolation
+    bone.updateMatrixWorld(true);
 }
 
-function drawThickLine(ctx, p1, p2, w, col1, col2) {
-    const dx = p2.x - p1.x, dy = p2.y - p1.y;
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const nx = -dy / len * w / 2, ny = dx / len * w / 2;
-    const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-    grad.addColorStop(0, col1);
-    grad.addColorStop(1, col2);
-    ctx.beginPath();
-    ctx.moveTo(p1.x + nx, p1.y + ny);
-    ctx.lineTo(p2.x + nx, p2.y + ny);
-    ctx.lineTo(p2.x - nx, p2.y - ny);
-    ctx.lineTo(p1.x - nx, p1.y - ny);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-}
-
-function drawJoint(ctx, p, r, col) {
-    ctx.shadowColor = col;
-    ctx.shadowBlur = r * 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = col;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-}
-
-function drawFaceCircle(ctx, nose, lSh, rSh, W, H, faceLms) {
-    const midShX = (lSh.x + rSh.x) / 2;
-    const midShY = (lSh.y + rSh.y) / 2;
-    const shoulderW = Math.abs(rSh.x - lSh.x);
-
-    let headCX, headCY, headR;
-
-    if (faceLms && faceLms.length >= 468) {
-        // Fit circle exactly to the detected Face Mesh
-        const fTop = avMap(faceLms[10], W, H);     // Top edge of face
-        const fBottom = avMap(faceLms[152], W, H); // Chin
-        const fLeft = avMap(faceLms[234], W, H);   // Left cheek edge
-        const fRight = avMap(faceLms[454], W, H);  // Right cheek edge
-
-        headCX = (fLeft.x + fRight.x) / 2;
-        headCY = (fTop.y + fBottom.y) / 2;
-
-        // Radius based on face width/height to fully encompass the features
-        headR = Math.max(20, (fBottom.y - fTop.y) * 0.65, (fRight.x - fLeft.x) * 0.65);
-    } else {
-        // Fallback: estimate head strictly from body landmarks
-        headCX = nose.x * W * (1 - 2 * 0.06) + W * 0.06;
-        headCY = midShY * H * (1 - 2 * 0.04) + H * 0.04 - shoulderW * H * 0.8;
-        headR = Math.max(20, shoulderW * W * 0.32);
-    }
-
-    // Head base shadow
-    ctx.shadowColor = AV.faceD;
-    ctx.shadowBlur = 8;
-    const gHead = ctx.createRadialGradient(headCX - headR * 0.15, headCY - headR * 0.15, headR * 0.1, headCX, headCY, headR);
-    gHead.addColorStop(0, AV.face);
-    gHead.addColorStop(1, AV.faceD);
-    ctx.beginPath();
-    ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
-    ctx.fillStyle = gHead;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    if (faceLms && faceLms.length >= 468) {
-        // Draw facial features exactly from landmarks
-        const mapLM = (idx) => avMap(faceLms[idx], W, H);
-
-        // Draw Eyes (simplified paths)
-        const drawEye = (pts) => {
-            ctx.beginPath();
-            ctx.moveTo(mapLM(pts[0]).x, mapLM(pts[0]).y);
-            for (let i = 1; i < pts.length; i++) ctx.lineTo(mapLM(pts[i]).x, mapLM(pts[i]).y);
-            ctx.closePath();
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fill();
-        };
-        // Left Eye: 33, 160, 158, 133, 153, 144
-        drawEye([33, 160, 158, 133, 153, 144]);
-        // Right Eye: 263, 387, 385, 362, 380, 373
-        drawEye([263, 387, 385, 362, 380, 373]);
-
-        // Draw Eyebrows (thick lines)
-        const drawBrow = (pts) => {
-            ctx.beginPath();
-            ctx.moveTo(mapLM(pts[0]).x, mapLM(pts[0]).y);
-            for (let i = 1; i < pts.length; i++) ctx.lineTo(mapLM(pts[i]).x, mapLM(pts[i]).y);
-            ctx.strokeStyle = '#4a3b32';
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
-        };
-        drawBrow([46, 53, 52, 65, 55]); // Left Brow
-        drawBrow([276, 283, 282, 295, 285]); // Right Brow
-
-        // Draw Mouth
-        const drawLip = (pts, color, fill = false) => {
-            ctx.beginPath();
-            ctx.moveTo(mapLM(pts[0]).x, mapLM(pts[0]).y);
-            for (let i = 1; i < pts.length; i++) ctx.lineTo(mapLM(pts[i]).x, mapLM(pts[i]).y);
-            ctx.closePath();
-            if (fill) {
-                ctx.fillStyle = color;
-                ctx.fill();
-            } else {
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-        };
-
-        // Inner mouth opening (background)
-        drawLip([78, 81, 13, 311, 308, 317, 14, 87], '#301010', true);
-        // Outer lip outline
-        drawLip([61, 39, 0, 269, 291, 375, 17, 146], '#8b5e4a');
-
-    } else {
-        // Fallback static face
-        const eyeY = headCY - headR * 0.15;
-        const eyeOffX = headR * 0.3;
-        [[headCX - eyeOffX, eyeY], [headCX + eyeOffX, eyeY]].forEach(([ex, ey]) => {
-            ctx.beginPath();
-            ctx.ellipse(ex, ey, headR * 0.12, headR * 0.08, 0, 0, Math.PI * 2);
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(ex + headR * 0.04, ey - headR * 0.02, headR * 0.03, 0, Math.PI * 2);
-            ctx.fillStyle = 'white';
-            ctx.fill();
-        });
-
-        // Mouth
-        ctx.beginPath();
-        ctx.arc(headCX, headCY + headR * 0.3, headR * 0.2, 0.1 * Math.PI, 0.9 * Math.PI);
-        ctx.strokeStyle = '#8b5e4a';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-    }
-
-    return { cx: headCX, cy: headCY, r: headR };
-}
-
-function drawTorso(ctx, lSh, rSh, lHip, rHip, W, H) {
-    const pLS = avMap(lSh, W, H), pRS = avMap(rSh, W, H);
-    const pLH = avMap(lHip, W, H), pRH = avMap(rHip, W, H);
-    // Torso polygon
-    const grad = ctx.createLinearGradient(pLS.x, pLS.y, pLH.x, pLH.y);
-    grad.addColorStop(0, AV.shirt);
-    grad.addColorStop(1, AV.shirtD);
-    ctx.beginPath();
-    ctx.moveTo(pLS.x, pLS.y);
-    ctx.lineTo(pRS.x, pRS.y);
-    ctx.lineTo(pRH.x, pRH.y);
-    ctx.lineTo(pLH.x, pLH.y);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-}
-
-function drawArm(ctx, sh, el, wr, W, H, color, colorD) {
-    const pSh = avMap(sh, W, H), pEl = avMap(el, W, H), pWr = avMap(wr, W, H);
-    const upperW = 14, lowerW = 10;
-    drawThickLine(ctx, pSh, pEl, upperW, color, colorD);
-    drawThickLine(ctx, pEl, pWr, lowerW, colorD, AV.skin);
-    drawJoint(ctx, pEl, 7, colorD);
-    drawJoint(ctx, pWr, 5, AV.skin);
-}
-
-function drawLeg(ctx, hip, knee, ankle, W, H) {
-    const pH = avMap(hip, W, H), pK = avMap(knee, W, H), pA = avMap(ankle, W, H);
-    drawThickLine(ctx, pH, pK, 16, AV.pants, AV.pantsD);
-    drawThickLine(ctx, pK, pA, 13, AV.pantsD, '#334155');
-    drawJoint(ctx, pK, 7, AV.pantsD);
-    drawJoint(ctx, pA, 5, '#475569');
-}
-
-function drawHandLandmarks(ctx, landmarks, color, W, H) {
-    if (!landmarks || landmarks.length < 21) return;
-    const FINGERS = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20]];
-    FINGERS.forEach(finger => {
-        ctx.beginPath();
-        for (let i = 0; i < finger.length; i++) {
-            const lm = landmarks[finger[i]];
-            if (!lm) continue;
-            const p = avMap(lm, W, H);
-            i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
-        }
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.lineJoin = 'round';
-        ctx.globalAlpha = 0.9;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-    });
-    landmarks.forEach(lm => {
-        if (!lm) return;
-        const p = avMap(lm, W, H);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-    });
-}
-
-function drawAvatar(frame) {
-    const W = avCanvas.width, H = avCanvas.height;
-    if (!W || !H) return;
-    avCtx.clearRect(0, 0, W, H);
-
-    // Background gradient
-    const bg = avCtx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.min(W, H) * 0.55);
-    bg.addColorStop(0, 'rgba(123,94,167,0.06)');
-    bg.addColorStop(1, 'rgba(0,0,0,0)');
-    avCtx.fillStyle = bg;
-    avCtx.fillRect(0, 0, W, H);
+function animateAvatar(frame) {
+    if (!currentAvatar || !frame.poseLandmarks) return;
 
     const pose = frame.poseLandmarks;
-    if (!pose || pose.length < 29) return;
+    // Map screen x,y coordinates to simple 3D vectors
+    // MediaPipe: x is Left->Right, y is Top->Bottom.
+    // ThreeJS/RPM: x is Right->Left (mirrored), y is Bottom->Top, z comes AT the camera.
+    const P = i => pose[i] ? new THREE.Vector3(pose[i].x * 2 - 1, -(pose[i].y * 2 - 1), -pose[i].z) : null;
 
-    const P = i => pose[i];
-    const lSh = P(11), rSh = P(12), lEl = P(13), rEl = P(14);
-    const lWr = P(15), rWr = P(16), lHip = P(23), rHip = P(24);
-    const lKn = P(25), rKn = P(26), lAn = P(27), rAn = P(28);
+    const lSh = P(11), rSh = P(12), lEl = P(13), rEl = P(14), lWr = P(15), rWr = P(16);
     const nose = P(0);
 
-    // Draw order: back → front (legs, torso, arms, head, hands)
-    if (lHip && rHip && lKn && lAn) drawLeg(avCtx, lHip, lKn, lAn, W, H);
-    if (rHip && rKn && rAn) drawLeg(avCtx, rHip, rKn, rAn, W, H);
+    // --- Right Arm (+X is Right in ThreeJS/RPM rest pose) ---
+    // Note: User's right is frame's left because MediaPipe is mirrored like a selfie. 
+    // lSh is actually the user's right shoulder physically in video. 
+    // We bind RightArm to lSh->lEl if we don't want to mirror, but wait: MediaPipe is already mirrored!
+    // Left on screen = user's right arm. Right on screen = user's left arm.
+    // Let's keep it simple: map R to R, L to L in screen space if we want a mirror avatar, which is best for viewing.
 
-    if (lSh && rSh && lHip && rHip) drawTorso(avCtx, lSh, rSh, lHip, rHip, W, H);
-
-    // Left arm (blue tones)
-    if (lSh && lEl && lWr) drawArm(avCtx, lSh, lEl, lWr, W, H, '#6bcbff', '#3b82f6');
-    // Right arm (purple tones)
-    if (rSh && rEl && rWr) drawArm(avCtx, rSh, rEl, rWr, W, H, AV.shirt, AV.shirtD);
-
-    // Shoulder dots
-    if (lSh) drawJoint(avCtx, avMap(lSh, W, H), 9, '#6bcbff');
-    if (rSh) drawJoint(avCtx, avMap(rSh, W, H), 9, AV.shirt);
-
-    // Head
-    if (nose && lSh && rSh) {
-        drawFaceCircle(avCtx, nose, lSh, rSh, W, H, frame.faceLandmarks);
+    // --- Right Arm (+X is Right in ThreeJS/RPM rest pose) ---
+    // Note: User's right is frame's left because MediaPipe is mirrored like a selfie. 
+    // Let's directly map Frame's Left to Avatar's Right Arm to act as a mirror
+    if (lSh && lEl && avatarBones.RightArm) {
+        aimBone(avatarBones.RightArm, new THREE.Vector3().subVectors(lEl, lSh).normalize(), new THREE.Vector3(1, 0, 0));
+    }
+    if (lEl && lWr && avatarBones.RightForeArm) {
+        aimBone(avatarBones.RightForeArm, new THREE.Vector3().subVectors(lWr, lEl).normalize(), new THREE.Vector3(1, 0, 0));
     }
 
-    // Hands from hand landmarks
-    drawHandLandmarks(avCtx, frame.rightHandLandmarks, '#ff9f8b', W, H);
-    drawHandLandmarks(avCtx, frame.leftHandLandmarks, '#8bc4ff', W, H);
+    // --- Left Arm (-X is Left in rest pose) ---
+    // Frame's Right maps to Avatar's Left Arm
+    if (rSh && rEl && avatarBones.LeftArm) {
+        aimBone(avatarBones.LeftArm, new THREE.Vector3().subVectors(rEl, rSh).normalize(), new THREE.Vector3(-1, 0, 0));
+    }
+    if (rEl && rWr && avatarBones.LeftForeArm) {
+        aimBone(avatarBones.LeftForeArm, new THREE.Vector3().subVectors(rWr, rEl).normalize(), new THREE.Vector3(-1, 0, 0));
+    }
 
-    // Gloss label
-    if (frame.gloss) {
-        avCtx.font = 'bold 22px Outfit, sans-serif';
-        avCtx.fillStyle = '#7B5EA7';
-        avCtx.textAlign = 'center';
-        avCtx.globalAlpha = 0.9;
-        avCtx.fillText(frame.gloss, W / 2, H - 24);
-        avCtx.globalAlpha = 1;
+    // --- Head / Neck ---
+    if (nose && rSh && lSh && avatarBones.Head) {
+        const midSh = new THREE.Vector3().addVectors(rSh, lSh).multiplyScalar(0.5);
+        const headDir = new THREE.Vector3().subVectors(nose, midSh).normalize();
+        headDir.z -= 0.15; // Natural forward tilt
+        aimBone(avatarBones.Head, headDir, new THREE.Vector3(0, 1, 0));
+    }
+
+    // --- Hands (Kalidokit 2D Fallback) ---
+    if (frame.rightHandLandmarks && window.Kalidokit && avatarBones.LeftHand) {
+        let rHandRig = Kalidokit.Hand.solve(frame.rightHandLandmarks, "Right");
+        if (rHandRig) {
+            avatarBones.LeftHand.rotation.set(rHandRig.RightWrist.x, rHandRig.RightWrist.y, rHandRig.RightWrist.z);
+            avatarBones.LeftHand.updateMatrixWorld(true);
+        }
+    }
+    if (frame.leftHandLandmarks && window.Kalidokit && avatarBones.RightHand) {
+        let lHandRig = Kalidokit.Hand.solve(frame.leftHandLandmarks, "Left");
+        if (lHandRig) {
+            avatarBones.RightHand.rotation.set(lHandRig.LeftWrist.x, lHandRig.LeftWrist.y, lHandRig.LeftWrist.z);
+            avatarBones.RightHand.updateMatrixWorld(true);
+        }
+    }
+
+    // --- Face Details ---
+    if (frame.faceLandmarks && headMesh.length > 0 && window.Kalidokit) {
+        const faceRig = Kalidokit.Face.solve(frame.faceLandmarks, { runtime: "browser", video: null });
+        if (faceRig) {
+            headMesh.forEach(mesh => {
+                if (!mesh.morphTargetDictionary) return;
+                const setBlend = (name, val) => {
+                    if (mesh.morphTargetDictionary[name] !== undefined) {
+                        mesh.morphTargetInfluences[mesh.morphTargetDictionary[name]] = val;
+                    }
+                };
+                setBlend("mouthOpen", faceRig.mouth.y);
+                setBlend("mouthSmile", faceRig.mouth.x);
+                setBlend("eyeBlinkLeft", faceRig.eye.l);
+                setBlend("eyeBlinkRight", faceRig.eye.r);
+            });
+        }
     }
 }
 
-// ═══ STUB: no VRM to initialize ════════════════════════════════════════════════
+// ═══ AVATAR (THREE.JS GLB) INIT ════════════════════════════════════════════════
 function initVRM() {
-    // Canvas avatar is ready immediately
-    const vrmLoadEl = document.getElementById('vrm-loading');
-    if (vrmLoadEl) vrmLoadEl.style.display = 'none';
-    UI.status.innerText = 'Avatar listo. Escribe texto para traducir señas.';
+    const container = document.getElementById('avatar-container');
+    const loadingEl = document.getElementById('vrm-loading');
+    if (!container) return;
+
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    // Move camera significantly back and up to capture large/misaligned models
+    camera.position.set(0, 1.5, 4.5);
+
+    orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+    // Target the center
+    orbitControls.target.set(0, 1.0, 0);
+    orbitControls.enablePan = false;
+    orbitControls.enableZoom = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    dirLight.position.set(1, 2, 3);
+    scene.add(dirLight);
+
+    const loader = new THREE.GLTFLoader();
+    // High quality realistic human model (Michelle) from official ThreeJS
+    const url = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Michelle.glb';
+
+    loader.load(url, (gltf) => {
+        currentAvatar = gltf.scene;
+        scene.add(currentAvatar);
+
+        currentAvatar.traverse(node => {
+            if (node.isBone) {
+                // Remove Mixamo prefix if present, and handle common Unity namings
+                let name = node.name.replace('mixamorig', '');
+                // Unity standard often just uses 'RightArm', 'RightForeArm', etc., which matches Mixamo after replace
+                avatarBones[name] = node;
+                console.log("Bone loaded:", name);
+            }
+            if (node.isMesh && node.morphTargetDictionary) {
+                headMesh.push(node);
+            }
+            if (node.isMesh && node.material) {
+                node.material.depthWrite = !node.material.transparent;
+            }
+        });
+
+        // Debug output to see what we actually captured
+        console.log("Avatar Bones mapped:", Object.keys(avatarBones).join(", "));
+
+        // We removed the T-Pose artificial rotations because it was locking the arms locally and breaking the IK solver.
+        // The quaternions should naturally align the vectors regardless of base pose.
+
+        if (loadingEl) loadingEl.style.display = 'none';
+        UI.status.innerText = 'Avatar Humano Listo. Escribe y traduce.';
+
+        const animateThree = () => {
+            requestAnimationFrame(animateThree);
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        };
+        animateThree();
+    },
+        (progress) => {
+            if (progress.total > 0 && loadingEl) {
+                UI.status.innerText = `Descargando Avatar 3D... ${Math.round((progress.loaded / progress.total) * 100)}%`;
+            }
+        },
+        (err) => {
+            console.error("No se pudo cargar GLB:", err);
+            UI.status.innerText = 'Error cargando Avatar 3D. Verifica conexión a internet.';
+            if (loadingEl) loadingEl.style.display = 'none';
+        });
+
+    const ro = new ResizeObserver(() => {
+        if (!renderer || !camera || !container) return;
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+    });
+    ro.observe(container);
 }
 
 // ═══ TRANSLATION ══════════════════════════════════════════════════════════════
@@ -662,7 +496,6 @@ async function loadVideo(gloss) {
     if (!gloss || gloss === currentVideoGloss) return;
     currentVideoGloss = gloss;
 
-    // Show loading state
     vidPlch.style.display = 'none';
     vidEl.style.display = 'none';
     vidError.style.display = 'none';
@@ -672,7 +505,14 @@ async function loadVideo(gloss) {
     document.getElementById('video-panel-label').innerText = `🎥 Video Real — ${gloss}`;
 
     try {
-        // Pre-fetch to check if the server can serve it
+        // Procedural signs starting with LETRA_ or NUMERO_ don't have videos
+        if (gloss.startsWith('LETRA_') || gloss.startsWith('NUMERO_')) {
+            vidLoad.style.display = 'none';
+            vidPlch.style.display = 'flex';
+            vidPlch.querySelector('.placeholder-text').innerText = 'Síntesis 3D Procedural (Sin Video)';
+            return;
+        }
+
         const resp = await fetch(`/api/video/${gloss}`, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
         if (!resp.ok) throw new Error('not found');
 
@@ -710,7 +550,6 @@ function renderVocab(words) {
 window.insertWord = (w) => {
     const cur = UI.textInput.value.trim();
     UI.textInput.value = cur ? `${cur} ${w.toLowerCase()}` : w.toLowerCase();
-    // Load video for this word immediately when clicked
     loadVideo(w.toUpperCase());
 };
 
@@ -760,10 +599,31 @@ UI.modeToggle.addEventListener('click', () => {
     document.getElementById('video-panel').style.display = (['both', 'video'].includes(viewMode)) ? 'flex' : 'none';
     document.getElementById('avatar-panel').style.display = (['both', 'avatar'].includes(viewMode)) ? 'block' : 'none';
     resizeCanvas();
+    window.dispatchEvent(new Event('resize'));
 });
+
+// Set initial visibility
+function setInitialView() {
+    const panels = {
+        'skeleton': ['skeleton-panel'],
+        'video': ['video-panel'],
+        'avatar': ['avatar-panel'],
+        'both': ['skeleton-panel', 'video-panel']
+    };
+
+    ['skeleton-panel', 'video-panel', 'avatar-panel'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+
+    (panels[viewMode] || ['skeleton-panel']).forEach(id => {
+        const el = document.getElementById(id);
+        el.style.display = (id === 'avatar-panel') ? 'block' : 'flex';
+    });
+}
 
 // ═══ INIT ═════════════════════════════════════════════════════════════════════
 initVRM();
 loadVocab();
+setInitialView();
 
-UI.status.innerText = 'Sistema listo. Cargando avatar...';
+UI.status.innerText = 'Sistema listo. Visualizando Esqueleto de Movimiento.';

@@ -23,8 +23,10 @@ LSC50_FACE_DIR   = "D:/LSC/LSC50/LANDMARKS/FACE_LANDMARKS"
 LSC50_LHAND_DIR  = "D:/LSC/LSC50/LANDMARKS/HANDS_LANDMARKS/LEFT_HAND_LANDMARKS"
 LSC50_RHAND_DIR  = "D:/LSC/LSC50/LANDMARKS/HANDS_LANDMARKS/RIGHT_HAND_LANDMARKS"
 GLOSS_INDEX_PATH = "D:/LSC/pipeline_output/gloss_index/gloss_index_full.json"
+DYNAMIC_LANDMARKS_DIR = "D:/LSC/pipeline_output/dynamic_landmarks"
 OUTPUT_DIR       = "D:/LSC/pipeline_output/synthesized"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DYNAMIC_LANDMARKS_DIR, exist_ok=True)
 
 # Sign ID mapping (matching lsc50_gloss_mapper.py)
 GLOSS_TO_SIGNID = {
@@ -50,20 +52,87 @@ GLOSS_TO_SIGNID = {
 FRAMES_PER_SIGN    = 30   # Uniform sampling per sign
 TRANSITION_FRAMES  = 5    # Blending frames between signs
 
-def load_lsc50_csv(directory: str, sign_id: str, participant: str = "0000", rep: int = 0) -> pd.DataFrame | None:
-    """Load a specific sign sample from LSC50 CSV landmark files."""
-    # Pattern: {sign_id}_{participant}_{repetition}.csv
-    fname = f"{sign_id}_{participant}_{str(rep).zfill(4)}.csv"
-    path = os.path.join(directory, fname)
+# Global cache for the gloss index
+GLOSS_INDEX = {}
+
+def load_gloss_index():
+    """Load the pre-built mapping of signs to available files."""
+    global GLOSS_INDEX
+    if os.path.exists(GLOSS_INDEX_PATH):
+        try:
+            with open(GLOSS_INDEX_PATH, "r", encoding="utf-8") as f:
+                GLOSS_INDEX = json.load(f)
+            logging.info(f"Loaded gloss index with {len(GLOSS_INDEX)} entries.")
+        except Exception as e:
+            logging.error(f"Error loading gloss index: {e}")
+    else:
+        logging.warning("Gloss index not found. Falling back to disk scanning.")
+
+# Load on module import
+load_gloss_index()
+
+# Linguistic Correction: Force specific samples known to be more accurate
+# Format: { "GLOSS": {"participant": "xxxx", "rep": y} }
+PREFERRED_SAMPLES = {
+    "GRACIAS": {"participant": "0004", "rep": 3}, # Starts higher up (better chin reach)
+}
+
+def load_dynamic_csv(label: str) -> pd.DataFrame | None:
+    """Load from the dynamic_landmarks folder (Alphabet/Numbers from LSC70)."""
+    fname = f"{label}.csv"
+    path = os.path.join(DYNAMIC_LANDMARKS_DIR, fname)
     if os.path.exists(path):
         return pd.read_csv(path).fillna(0)
-    # Try any available participant
-    for p in range(20):
-        for r in range(4):
-            fname = f"{sign_id}_{str(p).zfill(4)}_{str(r).zfill(4)}.csv"
-            path = os.path.join(directory, fname)
-            if os.path.exists(path):
-                return pd.read_csv(path).fillna(0)
+    return None
+
+def load_lsc50_csv(directory: str, sign_id: str, gloss: str = None) -> pd.DataFrame | None:
+    """Load a specific sign sample from LSC50 CSV landmark files using the index."""
+    
+    # Select best file from index if available
+    target_file = None
+    
+    if gloss and gloss.upper() in GLOSS_INDEX:
+        info = GLOSS_INDEX[gloss.upper()]
+        
+        # Determine which subdir we are in
+        key = "body"
+        if "HANDS_LANDMARKS/LEFT" in directory: key = "lhand"
+        elif "HANDS_LANDMARKS/RIGHT" in directory: key = "rhand"
+        elif "FACE_LANDMARKS" in directory: key = "face"
+        
+        files = info.get(key, [])
+        if files:
+            # 1. Try to find the preferred one if specified
+            if gloss.upper() in PREFERRED_SAMPLES:
+                pref = PREFERRED_SAMPLES[gloss.upper()]
+                match_name = f"{sign_id}_{pref['participant']}_{str(pref['rep']).zfill(4)}.csv"
+                if match_name in files:
+                    target_file = match_name
+            
+            # 2. Try default 0000_0000
+            if not target_file:
+                default_name = f"{sign_id}_0000_0000.csv"
+                if default_name in files:
+                    target_file = default_name
+            
+            # 3. Just take the first one
+            if not target_file:
+                target_file = files[0]
+                
+    if target_file:
+        path = os.path.join(directory, target_file)
+        if os.path.exists(path):
+            return pd.read_csv(path).fillna(0)
+
+    # 4. Emergency fallback (Legacy behavior - only if index is missing)
+    if not GLOSS_INDEX:
+        for p in range(5): # Limit scan depth for speed
+            for r in range(2):
+                fname = f"{sign_id}_{str(p).zfill(4)}_{str(r).zfill(4)}.csv"
+                path = os.path.join(directory, fname)
+                if os.path.exists(path):
+                    return pd.read_csv(path).fillna(0)
+    
     return None
 
 def csv_to_landmark_array(df: pd.DataFrame, num_landmarks: int, target_frames: int = FRAMES_PER_SIGN) -> np.ndarray:
@@ -139,27 +208,55 @@ def synthesize_sequence(glosses: List[str]) -> dict:
     all_frames = []
     prev_body = None
     
+    # Cache for loaded landmark arrays to speed up repetitive glosses (e.g. NUMERO_0)
+    landmark_cache = {}
+    
     for i, gloss in enumerate(glosses):
-        sign_id = GLOSS_TO_SIGNID.get(gloss.upper())
+        gloss_upper = gloss.upper()
         
-        if sign_id is None:
-            logging.warning(f"No sign ID for gloss: {gloss}")
-            continue
-        
-        # Load body landmarks (33 pose, 21 Lhand, 21 Rhand)
-        body_df = load_lsc50_csv(LSC50_BODY_DIR, sign_id)
-        face_df = load_lsc50_csv(LSC50_FACE_DIR, sign_id)
-        rhand_df = load_lsc50_csv(LSC50_RHAND_DIR, sign_id)
-        lhand_df = load_lsc50_csv(LSC50_LHAND_DIR, sign_id)
-        
-        if body_df is None:
-            logging.warning(f"No body data for {gloss} (sign_id={sign_id})")
-            continue
-        
-        body_arr  = csv_to_landmark_array(body_df, 33, FRAMES_PER_SIGN)
-        face_arr  = csv_to_landmark_array(face_df, 468, FRAMES_PER_SIGN)
-        rhand_arr = csv_to_landmark_array(rhand_df, 21, FRAMES_PER_SIGN)
-        lhand_arr = csv_to_landmark_array(lhand_df, 21, FRAMES_PER_SIGN)
+        # Check cache first
+        if gloss_upper in landmark_cache:
+            body_arr, face_arr, rhand_arr, lhand_arr = landmark_cache[gloss_upper]
+        else:
+            sign_id = GLOSS_TO_SIGNID.get(gloss_upper)
+            dynamic_df = None
+            # Priority: Check if it's a dynamic prefix (LETRA_ or NUMERO_)
+            if gloss_upper.startswith("LETRA_") or gloss_upper.startswith("NUMERO_"):
+                dynamic_df = load_dynamic_csv(gloss_upper)
+                
+            if dynamic_df is not None:
+                # Use dynamic landmarks
+                body_arr  = csv_to_landmark_array(dynamic_df, 33, FRAMES_PER_SIGN)
+                face_arr  = csv_to_landmark_array(dynamic_df, 468, FRAMES_PER_SIGN) 
+                rhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
+                lhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
+            elif sign_id is not None:
+                # Load landmarks from LSC50
+                body_df  = load_lsc50_csv(LSC50_BODY_DIR,  sign_id, gloss)
+                face_df  = load_lsc50_csv(LSC50_FACE_DIR,  sign_id, gloss)
+                rhand_df = load_lsc50_csv(LSC50_RHAND_DIR, sign_id, gloss)
+                lhand_df = load_lsc50_csv(LSC50_LHAND_DIR, sign_id, gloss)
+                
+                if body_df is None:
+                    logging.warning(f"No samples found for {gloss} (sign_id={sign_id}) - using placeholder")
+                    body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
+                    face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
+                    rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                    lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                else:
+                    body_arr  = csv_to_landmark_array(body_df, 33, FRAMES_PER_SIGN)
+                    face_arr  = csv_to_landmark_array(face_df, 468, FRAMES_PER_SIGN)
+                    rhand_arr = csv_to_landmark_array(rhand_df, 21, FRAMES_PER_SIGN)
+                    lhand_arr = csv_to_landmark_array(lhand_df, 21, FRAMES_PER_SIGN)
+            else:
+                logging.warning(f"Gloss {gloss} not found in any dataset - using placeholder")
+                body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
+                face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
+                rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+            
+            # Store in cache
+            landmark_cache[gloss_upper] = (body_arr, face_arr, rhand_arr, lhand_arr)
         
         logging.info(f"  [{gloss}] body:{body_arr.shape}, face:{face_arr.shape}, rh:{rhand_arr.shape}, lh:{lhand_arr.shape}")
         
@@ -178,13 +275,17 @@ def synthesize_sequence(glosses: List[str]) -> dict:
         
         # Add sign frames
         for t in range(FRAMES_PER_SIGN):
+            # Optimization: Only send every 5th face landmark to reduce JSON size and serialization time
+            # The frontend (drawFace) only uses every 5th one anyway.
+            face_subset = face_arr[t][::5] 
+            
             all_frames.append({
                 "gloss": gloss,
                 "poseLandmarks": array_to_landmark_list(body_arr[t]),
                 "pose3DLandmarks": array_to_landmark_list(body_arr[t]),
                 "leftHandLandmarks": array_to_landmark_list(lhand_arr[t]),
                 "rightHandLandmarks": array_to_landmark_list(rhand_arr[t]),
-                "faceLandmarks": array_to_landmark_list(face_arr[t]),
+                "faceLandmarks": array_to_landmark_list(face_subset),
             })
         
         prev_body = body_arr

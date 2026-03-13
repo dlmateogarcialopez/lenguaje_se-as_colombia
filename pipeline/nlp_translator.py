@@ -99,6 +99,16 @@ SPANISH_TO_GLOSS = {
     "perdon": "PERDON",
     "pregunta": "PREGUNTA",
     "numero": "NUMERO",
+    
+    # Términos de Dashboard / Facturación (Mappings semánticos a LSC50)
+    "pagar": "DINERO",
+    "pago": "DINERO",
+    "facturaron": "TRABAJO",
+    "dia": "MES", # Fallback aproximado si no existe DIA
+    "días": "MES",
+    "total": "GRANDE",
+    "fecha": "MAÑANA", # Fallback temporal
+    "vencimiento": "NOCHE", # Fallback temporal
 }
 
 def load_vocabulary() -> List[str]:
@@ -151,13 +161,30 @@ def translate_to_glosses(text: str, vocabulary: List[str] = None) -> List[str]:
         if not matched:
             word = tokens[i]
             if word not in STOPWORDS:
-                # Try uppercase match against known vocab
-                upper = word.upper()
-                if upper in vocab_set:
-                    glosses.append(upper)
+                # 1. Check if it's a number
+                if word.isdigit():
+                    for digit in word:
+                        glosses.append(f"NUMERO_{digit}")
+                    matched = True
                 else:
-                    # Word not available — mark as unknown
-                    logging.warning(f"No gloss found for: '{word}' — skipping")
+                    # 2. Try uppercase match against known vocab
+                    upper = word.upper()
+                    if upper in vocab_set:
+                        glosses.append(upper)
+                        matched = True
+                    else:
+                        # 3. Fingerspelling fallback
+                        logging.info(f"Fingerspelling word: '{word}'")
+                        for char in word:
+                            # Normalize special chars (ñ, etc)
+                            c = char.upper()
+                            if c == 'Ñ': c = 'NN'
+                            if c.isalpha():
+                                glosses.append(f"LETRA_{c}")
+                        matched = True
+            
+            if not matched:
+                logging.warning(f"No gloss found for: '{word}' — skipping")
             i += 1
     
     logging.info(f"Input: '{text}' → Glosses: {glosses}")

@@ -14,6 +14,36 @@ let isPlaying = false;
 let currentFrame = 0;
 let motionData = [];
 let lastTime = 0;
+const skCanvas = document.getElementById('skeleton-canvas');
+const ctx = skCanvas.getContext('2d');
+
+const COLORS = {
+    body: '#00EDDA',
+    rhand: '#ff6b6b',
+    lhand: '#6bcbff',
+    face: '#c0f566',
+    spine: '#ffd700',
+    joints: '#fff',
+};
+
+const POSE_CONNECTIONS = [
+    [0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8],
+    [11, 12], [11, 23], [12, 24], [23, 24],
+    [11, 13], [13, 15], [12, 14], [14, 16],
+    [15, 17], [15, 19], [15, 21], [17, 19],
+    [16, 18], [16, 20], [16, 22], [18, 20],
+    [23, 25], [25, 27], [27, 29], [27, 31], [29, 31],
+    [24, 26], [26, 28], [28, 30], [28, 32], [30, 32],
+];
+
+const HAND_CONNECTIONS = [
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [0, 9], [9, 10], [10, 11], [11, 12],
+    [0, 13], [13, 14], [14, 15], [15, 16],
+    [0, 17], [17, 18], [18, 19], [19, 20],
+    [5, 9], [9, 13], [13, 17],
+];
 const boneCache = new Map();
 const API_BASE = "";
 
@@ -69,9 +99,16 @@ function initThreeJS() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        resizeSkeletonCanvas();
     });
 
+    resizeSkeletonCanvas();
     animate();
+}
+
+function resizeSkeletonCanvas() {
+    skCanvas.width = window.innerWidth;
+    skCanvas.height = window.innerHeight;
 }
 
 function loadVRM(url) {
@@ -107,6 +144,7 @@ function animate(time) {
     if (isPlaying && motionData.length > 0 && (time - lastTime > 40)) {
         const frame = motionData[currentFrame];
         if (frame) {
+            drawSkeleton(frame);
             animateRig(frame);
             if (frame.gloss) {
                 UI.currentGloss.innerText = frame.gloss;
@@ -120,7 +158,91 @@ function animate(time) {
 
     if (currentVrm) currentVrm.update(delta);
     orbitControls.update();
-    renderer.render(scene, camera);
+    // renderer.render(scene, camera); // DISABLED 3D AVATAR AS REQUESTED
+}
+
+// ─── SKELETON DRAWING ─────────────────────────────────────────────────────────
+function drawSkeleton(frame) {
+    const W = skCanvas.width;
+    const H = skCanvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (frame.poseLandmarks) drawPoseSkeleton(frame.poseLandmarks, W, H);
+    if (frame.faceLandmarks) drawFace(frame.faceLandmarks, W, H);
+    if (frame.rightHandLandmarks) drawHand(frame.rightHandLandmarks, COLORS.rhand, W, H);
+    if (frame.leftHandLandmarks) drawHand(frame.leftHandLandmarks, COLORS.lhand, W, H);
+}
+
+function mapLM(lm, W, H, padX = 0.2, padY = 0.1) {
+    // Normal LSC Translator view usually needs the avatar/skeleton centered
+    // Landmarks are [0,1]. We scale and center.
+    const x = (padX + lm.x * (1 - 2 * padX)) * W;
+    const y = (padY + lm.y * (1 - 2 * padY)) * H;
+    return { x, y };
+}
+
+function drawPoseSkeleton(landmarks, W, H) {
+    POSE_CONNECTIONS.forEach(([a, b]) => {
+        const lmA = landmarks[a], lmB = landmarks[b];
+        if (!lmA || !lmB) return;
+        const pA = mapLM(lmA, W, H);
+        const pB = mapLM(lmB, W, H);
+        ctx.beginPath();
+        ctx.moveTo(pA.x, pA.y);
+        ctx.lineTo(pB.x, pB.y);
+        ctx.strokeStyle = COLORS.body;
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.6;
+        ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+
+    landmarks.forEach((lm, i) => {
+        if (!lm || i > 24) return; // Only main body
+        const p = mapLM(lm, W, H);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = COLORS.joints;
+        ctx.fill();
+    });
+}
+
+function drawHand(landmarks, color, W, H) {
+    HAND_CONNECTIONS.forEach(([a, b]) => {
+        const lmA = landmarks[a], lmB = landmarks[b];
+        if (!lmA || !lmB) return;
+        const pA = mapLM(lmA, W, H);
+        const pB = mapLM(lmB, W, H);
+        ctx.beginPath();
+        ctx.moveTo(pA.x, pA.y);
+        ctx.lineTo(pB.x, pB.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    });
+    landmarks.forEach(lm => {
+        if (!lm) return;
+        const p = mapLM(lm, W, H);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+    });
+}
+
+function drawFace(landmarks, W, H) {
+    ctx.fillStyle = COLORS.face;
+    ctx.globalAlpha = 0.4;
+    // Draw only a subset of face landmarks for performance and clarity
+    for (let i = 0; i < landmarks.length; i++) {
+        const lm = landmarks[i];
+        if (!lm) continue;
+        const p = mapLM(lm, W, H);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -354,7 +476,7 @@ async function translate() {
     if (!text) return;
 
     UI.btnTranslate.disabled = true;
-    UI.btnTranslate.innerText = "Traduciendo...";
+    UI.btnTranslate.innerText = "Sintetizando LSC...";
     UI.errorMsg.style.display = "none";
     UI.glossDisplay.innerHTML = "";
 
@@ -363,7 +485,7 @@ async function translate() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text }),
-            signal: AbortSignal.timeout(10000),
+            signal: AbortSignal.timeout(60000), // Increased to 60s for long dashboard phrases
         });
 
         if (!resp.ok) {
