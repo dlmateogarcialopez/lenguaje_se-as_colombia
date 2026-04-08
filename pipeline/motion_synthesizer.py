@@ -62,7 +62,7 @@ def load_gloss_index():
         try:
             with open(GLOSS_INDEX_PATH, "r", encoding="utf-8") as f:
                 GLOSS_INDEX = json.load(f)
-            logging.info(f"Loaded gloss index with {len(GLOSS_INDEX)} entries.")
+            print(f"DEBUG: Loaded gloss index with {len(GLOSS_INDEX)} entries.")
         except Exception as e:
             logging.error(f"Error loading gloss index: {e}")
     else:
@@ -77,13 +77,140 @@ PREFERRED_SAMPLES = {
     "GRACIAS": {"participant": "0004", "rep": 3}, # Starts higher up (better chin reach)
 }
 
-def load_dynamic_csv(label: str) -> pd.DataFrame | None:
-    """Load from the dynamic_landmarks folder (Alphabet/Numbers from LSC70)."""
+# --- Procedural Month Configuration ---
+MONTH_CONFIG = {
+    "MES_ENERO":      {"letter": "LETRA_E", "motion": "circle", "pos": [0.15, 0.45]}, # Cheek
+    "MES_FEBRERO":    {"letter": "LETRA_F", "motion": "horiz",  "pos": [0.00, 0.35]}, # Eyes
+    "MES_MARZO":      {"letter": "LETRA_M", "motion": "static", "pos": [0.00, 0.55]}, # Chin
+    "MES_ABRIL":      {"letter": "LETRA_A", "motion": "circle", "pos": [0.00, 0.25]}, # Forehead
+    "MES_MAYO":       {"letter": "LETRA_M", "motion": "down",   "pos": [0.00, 0.25]}, # Descend from forehead
+    "MES_JUNIO":      {"letter": "LETRA_J", "motion": "curve",  "pos": [0.10, 0.45]}, # Near nose
+    "MES_JULIO":      {"letter": "LETRA_J", "motion": "j_path", "pos": [0.20, 0.50]}, # Free space
+    "MES_AGOSTO":     {"letter": "LETRA_A", "motion": "static", "pos": [0.25, 0.60]}, # Shoulder
+    "MES_SEPTIEMBRE": {"letter": "LETRA_S", "motion": "static", "pos": [0.20, 0.35]}, # Temple
+    "MES_OCTUBRE":    {"letter": "LETRA_O", "motion": "circle", "pos": [0.10, 0.35]}, # Eye
+    "MES_NOVIEMBRE":  {"letter": "LETRA_N", "motion": "static", "pos": [0.05, 0.45]}, # Nose
+    "MES_DICIEMBRE":  {"letter": "LETRA_D", "motion": "down",   "pos": [0.00, 0.55]}, # Beard motion
+}
+
+def load_dynamic_csv(label: str) -> np.ndarray:
+    """Load alphabet/numbers landmarks using a fast, non-pandas method."""
     fname = f"{label}.csv"
     path = os.path.join(DYNAMIC_LANDMARKS_DIR, fname)
-    if os.path.exists(path):
-        return pd.read_csv(path).fillna(0)
-    return None
+    if not os.path.exists(path):
+        return None
+        
+    try:
+        # Binary load to avoid text-mode hangs on some Windows environments
+        with open(path, "rb") as f:
+            content = f.read().decode('utf-8', errors='ignore')
+        
+        lines = content.splitlines()
+        if not lines: return None
+        
+        data = []
+        # Skip header (line 0)
+        for line in lines[1:]:
+            parts = line.split(",")
+            if len(parts) > 1:
+                # Skip first part (index) and map to float
+                # We use a faster list comprehension
+                try:
+                    vals = [float(x) if x else 0.0 for x in parts[1:]]
+                    # Accept both full (1629) and pose-only (99)
+                    if len(vals) in [1629, 99]:
+                        data.append(vals)
+                except ValueError:
+                    continue
+        
+        if not data:
+            print(f"WARNING: No valid data rows found in {fname} (Columns found: {len(parts) if 'parts' in locals() else 'Unknown'})")
+            return None
+            
+        return np.array(data)
+    except Exception as e:
+        print(f"ERROR loading dynamic CSV {label}: {e}")
+        return None
+
+def synthesize_month_procedural(gloss: str):
+    """Generates landmarks for a month by applying motion to a base letter."""
+    cfg = MONTH_CONFIG.get(gloss)
+    if not cfg:
+        return np.zeros((FRAMES_PER_SIGN, 33, 3)), np.zeros((FRAMES_PER_SIGN, 468, 3)), np.zeros((FRAMES_PER_SIGN, 21, 3)), np.zeros((FRAMES_PER_SIGN, 21, 3))
+    
+    # 1. Load base letter data (as numpy array directly)
+    data = load_dynamic_csv(cfg["letter"])
+    if data is None:
+        return np.zeros((FRAMES_PER_SIGN, 33, 3)), np.zeros((FRAMES_PER_SIGN, 468, 3)), np.zeros((FRAMES_PER_SIGN, 21, 3)), np.zeros((FRAMES_PER_SIGN, 21, 3))
+    
+    # Custom Sampling (simulating csv_to_landmark_array logic but with flat data)
+    frames = data.shape[0]
+    indices = np.linspace(0, frames - 1, FRAMES_PER_SIGN, dtype=int)
+    sampled = data[indices]
+    
+    # Reshape features into structured landmarks
+    feat_count = sampled.shape[1]
+    
+    if feat_count == 1629:
+        body  = sampled[:, 0:99].reshape((FRAMES_PER_SIGN, 33, 3))
+        face  = sampled[:, 99:1503].reshape((FRAMES_PER_SIGN, 468, 3))
+        rhand = sampled[:, 1503:1566].reshape((FRAMES_PER_SIGN, 21, 3))
+        lhand = sampled[:, 1566:1629].reshape((FRAMES_PER_SIGN, 21, 3))
+    else:
+        # Pose only (99)
+        body  = sampled[:, 0:99].reshape((FRAMES_PER_SIGN, 33, 3))
+        face  = np.zeros((FRAMES_PER_SIGN, 468, 3))
+        rhand = np.zeros((FRAMES_PER_SIGN, 21, 3))
+        lhand = np.zeros((FRAMES_PER_SIGN, 21, 3))
+
+    # 2. Apply target position (offset)
+    # We move the right hand and the arm (wrist/elbow) to the target position
+    target = cfg["pos"] # [x_offset, y_target]
+    
+    for t in range(FRAMES_PER_SIGN):
+        # Procedural Offset Logic
+        dx, dy = 0, 0
+        progress = t / FRAMES_PER_SIGN
+        
+        if cfg["motion"] == "circle":
+            dx = 0.05 * np.cos(progress * 2 * np.pi)
+            dy = 0.05 * np.sin(progress * 2 * np.pi)
+        elif cfg["motion"] == "horiz":
+            dx = 0.10 * np.sin(progress * 2 * np.pi)
+        elif cfg["motion"] == "down":
+            dy = 0.20 * progress
+        elif cfg["motion"] == "curve":
+            dx = 0.05 * np.sin(progress * np.pi)
+            dy = 0.10 * progress
+        elif cfg["motion"] == "j_path":
+            dx = 0.05 * np.cos(progress * np.pi)
+            dy = 0.20 * progress if progress > 0.5 else 0
+            
+        # Target center (Head is approx 0.5, 0.4)
+        base_x = 0.5 + target[0]
+        base_y = target[1]
+        
+        # Move the right hand (rhand and pose 16)
+        # Calculate current hand center in base landmarks to find translation
+        current_wrist = rhand[t][0] # Landmark 0 is wrist
+        offset_x = (base_x + dx) - current_wrist[0]
+        offset_y = (base_y + dy) - current_wrist[1]
+        
+        rhand[t][:, 0] += offset_x
+        rhand[t][:, 1] += offset_y
+        
+        # Move pose hand landmarks (16, 18, 20, 22)
+        hand_indices = [16, 18, 20, 22]
+        for idx in hand_indices:
+            body[t][idx][0] += offset_x
+            body[t][idx][1] += offset_y
+            
+        # Adjust Elbow (14) to follow roughly
+        body[t][14][0] = body[t][16][0] + 0.1
+        body[t][14][1] = body[t][16][1] + 0.2
+        
+    return body, face, rhand, lhand
+
 
 def load_lsc50_csv(directory: str, sign_id: str, gloss: str = None) -> pd.DataFrame | None:
     """Load a specific sign sample from LSC50 CSV landmark files using the index."""
@@ -135,12 +262,52 @@ def load_lsc50_csv(directory: str, sign_id: str, gloss: str = None) -> pd.DataFr
     
     return None
 
-def csv_to_landmark_array(df: pd.DataFrame, num_landmarks: int, target_frames: int = FRAMES_PER_SIGN) -> np.ndarray:
+def csv_to_landmark_array(df, num_landmarks: int, target_frames: int = FRAMES_PER_SIGN) -> np.ndarray:
     """
-    Converts a CSV dataframe to a normalized (T, N, 3) numpy array.
+    Converts a CSV (Pandas or NumPy) to a normalized (T, N, 3) numpy array.
     Handles variable-length sequences by uniform sampling.
     """
-    if df is None or df.empty:
+    if df is None:
+        return np.zeros((target_frames, num_landmarks, 3))
+    
+    # CASE 1: NumPy Array (Already loaded/processed)
+    if isinstance(df, np.ndarray):
+        if df.size == 0:
+            return np.zeros((target_frames, num_landmarks, 3))
+        
+        frames = df.shape[0]
+        indices = np.linspace(0, frames - 1, target_frames, dtype=int)
+        sampled = df[indices]
+        
+        # If it's already 3D (T, N, 3), return it
+        if len(sampled.shape) == 3:
+            return sampled
+            
+        # If it's 2D (T, Features), we need to check if features match mapping
+        # For LSC70/LSC50 typical shape is (T, 1629) or (T, N*3)
+        if len(sampled.shape) == 2:
+            feat_count = sampled.shape[1]
+            if feat_count == 1629:
+                # Standard LSC layout: Pose(99), Face(1404), RHand(63), LHand(63)
+                if num_landmarks == 33:   return sampled[:, 0:99].reshape((target_frames, 33, 3))
+                elif num_landmarks == 468: return sampled[:, 99:1503].reshape((target_frames, 468, 3))
+                elif num_landmarks == 21:  
+                    # This is ambiguous between R/L hand. 
+                    # For safety, we'll try to guess based on context or just return zeros.
+                    # But actually we often call it specifically.
+                    return sampled[:, 1503:1566].reshape((target_frames, 21, 3)) 
+            else:
+                # Generic fallback if features = num_landmarks * 3
+                n_available = feat_count // 3
+                n_take = min(num_landmarks, n_available)
+                res = np.zeros((target_frames, num_landmarks, 3))
+                res[:, :n_take, :] = sampled[:, :n_take*3].reshape((target_frames, n_take, 3))
+                return res
+        
+        return np.zeros((target_frames, num_landmarks, 3))
+
+    # CASE 2: Pandas DataFrame
+    if df.empty:
         return np.zeros((target_frames, num_landmarks, 3))
     
     # Try to find coordinate columns
@@ -203,8 +370,7 @@ def synthesize_sequence(glosses: List[str]) -> dict:
     Takes a list of glosses and returns a JSON-serializable dict
     with sequential frames ready for WebGL rendering.
     """
-    logging.info(f"Synthesizing {len(glosses)} glosses: {glosses}")
-    
+    print(f"INFO: Starting synthesis for {len(glosses)} glosses...")
     all_frames = []
     prev_body = None
     
@@ -218,42 +384,46 @@ def synthesize_sequence(glosses: List[str]) -> dict:
         if gloss_upper in landmark_cache:
             body_arr, face_arr, rhand_arr, lhand_arr = landmark_cache[gloss_upper]
         else:
-            sign_id = GLOSS_TO_SIGNID.get(gloss_upper)
-            dynamic_df = None
-            # Priority: Check if it's a dynamic prefix (LETRA_ or NUMERO_)
-            if gloss_upper.startswith("LETRA_") or gloss_upper.startswith("NUMERO_"):
-                dynamic_df = load_dynamic_csv(gloss_upper)
-                
-            if dynamic_df is not None:
-                # Use dynamic landmarks
-                body_arr  = csv_to_landmark_array(dynamic_df, 33, FRAMES_PER_SIGN)
-                face_arr  = csv_to_landmark_array(dynamic_df, 468, FRAMES_PER_SIGN) 
-                rhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
-                lhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
-            elif sign_id is not None:
-                # Load landmarks from LSC50
-                body_df  = load_lsc50_csv(LSC50_BODY_DIR,  sign_id, gloss)
-                face_df  = load_lsc50_csv(LSC50_FACE_DIR,  sign_id, gloss)
-                rhand_df = load_lsc50_csv(LSC50_RHAND_DIR, sign_id, gloss)
-                lhand_df = load_lsc50_csv(LSC50_LHAND_DIR, sign_id, gloss)
-                
-                if body_df is None:
-                    logging.warning(f"No samples found for {gloss} (sign_id={sign_id}) - using placeholder")
+            # 1. Procedural Month Synthesis
+            if gloss_upper.startswith("MES_"):
+                body_arr, face_arr, rhand_arr, lhand_arr = synthesize_month_procedural(gloss_upper)
+            else:
+                sign_id = GLOSS_TO_SIGNID.get(gloss_upper)
+                dynamic_df = None
+                # Priority: Check if it's a dynamic prefix (LETRA_ or NUMERO_)
+                if gloss_upper.startswith("LETRA_") or gloss_upper.startswith("NUMERO_"):
+                    dynamic_df = load_dynamic_csv(gloss_upper)
+                    
+                if dynamic_df is not None:
+                    # Use dynamic landmarks
+                    body_arr  = csv_to_landmark_array(dynamic_df, 33, FRAMES_PER_SIGN)
+                    face_arr  = csv_to_landmark_array(dynamic_df, 468, FRAMES_PER_SIGN) 
+                    rhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
+                    lhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
+                elif sign_id is not None:
+                    # Load landmarks from LSC50
+                    body_df  = load_lsc50_csv(LSC50_BODY_DIR,  sign_id, gloss)
+                    face_df  = load_lsc50_csv(LSC50_FACE_DIR,  sign_id, gloss)
+                    rhand_df = load_lsc50_csv(LSC50_RHAND_DIR, sign_id, gloss)
+                    lhand_df = load_lsc50_csv(LSC50_LHAND_DIR, sign_id, gloss)
+                    
+                    if body_df is None:
+                        logging.warning(f"No samples found for {gloss} (sign_id={sign_id}) - using placeholder")
+                        body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
+                        face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
+                        rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                        lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                    else:
+                        body_arr  = csv_to_landmark_array(body_df, 33, FRAMES_PER_SIGN)
+                        face_arr  = csv_to_landmark_array(face_df, 468, FRAMES_PER_SIGN)
+                        rhand_arr = csv_to_landmark_array(rhand_df, 21, FRAMES_PER_SIGN)
+                        lhand_arr = csv_to_landmark_array(lhand_df, 21, FRAMES_PER_SIGN)
+                else:
+                    logging.warning(f"Gloss {gloss} not found in any dataset - using placeholder")
                     body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
                     face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
                     rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
                     lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
-                else:
-                    body_arr  = csv_to_landmark_array(body_df, 33, FRAMES_PER_SIGN)
-                    face_arr  = csv_to_landmark_array(face_df, 468, FRAMES_PER_SIGN)
-                    rhand_arr = csv_to_landmark_array(rhand_df, 21, FRAMES_PER_SIGN)
-                    lhand_arr = csv_to_landmark_array(lhand_df, 21, FRAMES_PER_SIGN)
-            else:
-                logging.warning(f"Gloss {gloss} not found in any dataset - using placeholder")
-                body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
-                face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
-                rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
-                lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
             
             # Store in cache
             landmark_cache[gloss_upper] = (body_arr, face_arr, rhand_arr, lhand_arr)

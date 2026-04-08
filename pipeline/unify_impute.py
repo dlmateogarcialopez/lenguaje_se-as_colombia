@@ -10,7 +10,7 @@ def unify_and_impute():
     
     # Load intermediate datasets if they exist
     dfs = []
-    sources = ["lsc50_interim.csv", "lsc54_interim.csv", "lsc70_interim.csv"]
+    sources = ["lsc50_interim.csv", "lsc54_interim.csv", "lsc70_interim.csv", "lscpropio_interim.csv"]
     
     for src in sources:
         path = os.path.join(config.OUTPUT_DIR, src)

@@ -109,6 +109,20 @@ SPANISH_TO_GLOSS = {
     "total": "GRANDE",
     "fecha": "MAÑANA", # Fallback temporal
     "vencimiento": "NOCHE", # Fallback temporal
+
+    # Meses del Año (Mapeo para Síntesis Procedural)
+    "enero": "MES_ENERO",
+    "febrero": "MES_FEBRERO",
+    "marzo": "MES_MARZO",
+    "abril": "MES_ABRIL",
+    "mayo": "MES_MAYO",
+    "junio": "MES_JUNIO",
+    "julio": "MES_JULIO",
+    "agosto": "MES_AGOSTO",
+    "septiembre": "MES_SEPTIEMBRE",
+    "octubre": "MES_OCTUBRE",
+    "noviembre": "MES_NOVIEMBRE",
+    "diciembre": "MES_DICIEMBRE",
 }
 
 def load_vocabulary() -> List[str]:
@@ -140,6 +154,10 @@ def translate_to_glosses(text: str, vocabulary: List[str] = None) -> List[str]:
         vocabulary = load_vocabulary()
     
     vocab_set = {v.upper() for v in vocabulary}    
+    
+    # Pre-procesamiento de fechas (Ej: "31 de agosto" -> "31 agosto")
+    text = re.sub(r'(\d+)\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)', r'\1 \2', text, flags=re.IGNORECASE)
+    
     normalized = normalize_text(text)
     tokens = normalized.split()
     
@@ -152,7 +170,10 @@ def translate_to_glosses(text: str, vocabulary: List[str] = None) -> List[str]:
         for n in [3, 2, 1]:
             phrase = " ".join(tokens[i:i+n])
             gloss = SPANISH_TO_GLOSS.get(phrase)
-            if gloss and (gloss in vocab_set or len(vocab_set) == 0):
+            
+            # Allow matching if it's in vocab OR if it's a dynamic prefix (LETRA/NUMERO/MES)
+            is_dynamic = gloss and (gloss.startswith("LETRA_") or gloss.startswith("NUMERO_") or gloss.startswith("MES_"))
+            if gloss and (gloss in vocab_set or is_dynamic or len(vocab_set) == 0):
                 glosses.append(gloss)
                 i += n
                 matched = True

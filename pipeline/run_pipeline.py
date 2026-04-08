@@ -2,6 +2,7 @@ import logging
 import os
 
 import ingest_lsc54_lsc50
+import ingest_lscpropio
 import convert_lsc70
 import unify_impute
 import spatial_normalization
@@ -26,6 +27,16 @@ def main():
     df_54 = lsc54_ingestor.process()
     if not df_54.empty:
         df_54.to_csv(os.path.join(config.OUTPUT_DIR, "lsc54_interim.csv"), index=False)
+    
+    # Paso 1.5: Ingesta LSCPROPIO (Videos propios)
+    logging.info("\n--- PASO 1.5: Ingesta LSCPROPIO (Videos) ---")
+    lscpropio_ingestor = ingest_lscpropio.LSCPropioIngestor(
+        config.LSCPROPIO_DIR,
+        frame_step=2,  # Procesar cada 2 frames para balancear velocidad/detalle
+    )
+    df_propio = lscpropio_ingestor.process()
+    if not df_propio.empty:
+        logging.info(f"LSCPROPIO: {df_propio.shape[0]} frames, {df_propio['sign_label'].nunique()} etiquetas")
     
     # Paso 2: Convertir LSC70 (Imágenes)
     logging.info("\n--- PASO 2: Extracción Keypoints LSC70 ---")

@@ -28,6 +28,9 @@ class LSC50Ingestor:
             vid_id = os.path.basename(bf).replace('.csv', '')
             try:
                 df_body = pd.read_csv(bf)
+                if 'Unnamed: 0' in df_body.columns:
+                    df_body.drop(columns=['Unnamed: 0'], inplace=True)
+
                 # Map Body (LSC50) to pose (MediaPipe naming)
                 pose_map = {f"landmark_{i}_{ax}": f"pose_{i}_{ax}" for i in range(33) for ax in ['x','y','z']}
                 df_body.rename(columns=pose_map, inplace=True)
@@ -40,6 +43,8 @@ class LSC50Ingestor:
                 lhf = os.path.join(lhand_dir, f"{vid_id}.csv")
                 if os.path.exists(lhf):
                     df_lh = pd.read_csv(lhf)
+                    if 'Unnamed: 0' in df_lh.columns:
+                        df_lh.drop(columns=['Unnamed: 0'], inplace=True)
                     df_lh.rename(columns={f"landmark_{i}_{ax}": f"l_hand_{i}_{ax}" for i in range(21) for ax in ['x','y','z']}, inplace=True)
                     df_body = df_body.join(df_lh)
                 
@@ -47,6 +52,8 @@ class LSC50Ingestor:
                 rhf = os.path.join(rhand_dir, f"{vid_id}.csv")
                 if os.path.exists(rhf):
                     df_rh = pd.read_csv(rhf)
+                    if 'Unnamed: 0' in df_rh.columns:
+                        df_rh.drop(columns=['Unnamed: 0'], inplace=True)
                     df_rh.rename(columns={f"landmark_{i}_{ax}": f"r_hand_{i}_{ax}" for i in range(21) for ax in ['x','y','z']}, inplace=True)
                     df_body = df_body.join(df_rh)
                     
@@ -54,6 +61,8 @@ class LSC50Ingestor:
                 ff = os.path.join(face_dir, f"{vid_id}.csv")
                 if os.path.exists(ff):
                     df_face = pd.read_csv(ff)
+                    if 'Unnamed: 0' in df_face.columns:
+                        df_face.drop(columns=['Unnamed: 0'], inplace=True)
                     df_face.rename(columns={f"landmark_{i}_{ax}": f"face_{i}_{ax}" for i in range(468) for ax in ['x','y','z']}, inplace=True)
                     df_body = df_body.join(df_face)
                     
