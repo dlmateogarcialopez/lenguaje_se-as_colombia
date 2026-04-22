@@ -407,7 +407,7 @@ class LSCPropioIngestor:
 if __name__ == "__main__":
     ingestor = LSCPropioIngestor(
         config.LSCPROPIO_DIR,
-        max_videos=3,  # Limitar para prueba rápida
+        max_videos=None,  # Process all videos
         frame_step=2,  # Procesar cada 2 frames
     )
     df = ingestor.process()

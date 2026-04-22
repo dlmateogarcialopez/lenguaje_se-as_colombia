@@ -98,8 +98,23 @@ def status():
     return {"status": "online", "service": "LSC Unified Server"}
 
 @app.get("/vocabulary")
-def vocabulary():
-    return {"vocabulary": load_vocabulary()}
+def get_vocabulary():
+    from motion_synthesizer import GLOSS_TO_SIGNID, MONTH_CONFIG
+    import string
+    
+    # 1. Base Words (LSC50 organic extractions)
+    base_words = list(GLOSS_TO_SIGNID.keys())
+    
+    # 2. Procedural Months (Strip 'MES_' prefix for UI display)
+    month_words = [m.replace('MES_', '') for m in MONTH_CONFIG.keys()]
+    
+    # 3. Letters/Fingerspelling capability
+    letters = list(string.ascii_uppercase)
+    
+    # Sort and merge unique elements
+    all_words = sorted(list(set(base_words + month_words + letters)))
+    
+    return {"vocabulary": all_words, "count": len(all_words)}
 
 @app.get("/api/video_list")
 def api_video_list():
@@ -124,7 +139,20 @@ def api_get_video(gloss: str):
     """Serve LSC50 video for a given gloss as MP4."""
     gloss_upper = gloss.upper()
     if gloss_upper not in GLOSS_TO_SIGNID:
-        raise HTTPException(status_code=404, detail=f"Gloss '{gloss}' not in vocabulary.")
+        # Fallback para LSCPROPIO: buscar recursivamente cualquier mp4 que contenga el nombre de la glosa
+        lsc_propio_dir = "D:/LSC/LSCPROPIO"
+        search_pattern = os.path.join(lsc_propio_dir, "**", "*.mp4")
+        import glob
+        matches = glob.glob(search_pattern, recursive=True)
+        clean_gloss = gloss_upper.replace('MES_', '')
+        # Buscar coincidencia exacta en el nombre base (ignorando -personaX)
+        for m in matches:
+            filename = os.path.basename(m).upper()
+            # Si el filename contiene la gloss seguida de un delimitador o extensiones (soportando m4v)
+            if filename.startswith(clean_gloss + "-") or filename.startswith(clean_gloss + "_") or filename.startswith(clean_gloss + "PERSONA") or filename == clean_gloss + ".MP4" or filename == clean_gloss + ".M4V":
+                return FileResponse(m, media_type="video/mp4", headers={"Cache-Control": "public, max-age=86400"})
+                
+        raise HTTPException(status_code=404, detail=f"Gloss '{gloss}' not in vocabulary and no video found in LSCPROPIO.")
 
     # Check background cache first
     with VIDEO_LOCK:

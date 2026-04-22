@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  lsc-extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile.extractor
+    container_name: mediapipe_extractor
+    environment:
+      - LSC_INPUT=/app/LSCPROPIO
+      - LSC_OUTPUT=/app/extracted_csvs
+    volumes:
+      # Monta tu carpeta LSCPROPIO local en el contenedor
+      - ./LSCPROPIO:/app/LSCPROPIO
+      # Monta la carpeta donde el Traductor lee los CSV dinámicos localmente
+      - ./pipeline_output/dynamic_landmarks:/app/extracted_csvs
+    restart: "no"

@@ -1,0 +1,16 @@
+FROM python:3.10-slim
+
+# Configurar directorio de trabajo
+WORKDIR /app
+
+# Copiar el analizador MediaPipe
+COPY lscpropio_colab_extractor.py /app/
+
+# Instalar dependencias puras y desinstalar las versiones GUI de OpenCV que MediaPipe fuerza.
+# Esto asegura que todo el contenedor se ejecute sin referenciar libGL o libxcb (Headless total).
+RUN pip install --no-cache-dir mediapipe pandas tqdm && \
+    pip uninstall -y opencv-python opencv-contrib-python && \
+    pip install --no-cache-dir opencv-python-headless opencv-contrib-python-headless
+
+# Ejecutar script
+CMD ["python", "lscpropio_colab_extractor.py"]

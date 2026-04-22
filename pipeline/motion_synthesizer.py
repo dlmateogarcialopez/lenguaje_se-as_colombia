@@ -77,20 +77,76 @@ PREFERRED_SAMPLES = {
     "GRACIAS": {"participant": "0004", "rep": 3}, # Starts higher up (better chin reach)
 }
 
-# --- Procedural Month Configuration ---
 MONTH_CONFIG = {
-    "MES_ENERO":      {"letter": "LETRA_E", "motion": "circle", "pos": [0.15, 0.45]}, # Cheek
-    "MES_FEBRERO":    {"letter": "LETRA_F", "motion": "horiz",  "pos": [0.00, 0.35]}, # Eyes
-    "MES_MARZO":      {"letter": "LETRA_M", "motion": "static", "pos": [0.00, 0.55]}, # Chin
-    "MES_ABRIL":      {"letter": "LETRA_A", "motion": "circle", "pos": [0.00, 0.25]}, # Forehead
-    "MES_MAYO":       {"letter": "LETRA_M", "motion": "down",   "pos": [0.00, 0.25]}, # Descend from forehead
-    "MES_JUNIO":      {"letter": "LETRA_J", "motion": "curve",  "pos": [0.10, 0.45]}, # Near nose
-    "MES_JULIO":      {"letter": "LETRA_J", "motion": "j_path", "pos": [0.20, 0.50]}, # Free space
-    "MES_AGOSTO":     {"letter": "LETRA_A", "motion": "static", "pos": [0.25, 0.60]}, # Shoulder
-    "MES_SEPTIEMBRE": {"letter": "LETRA_S", "motion": "static", "pos": [0.20, 0.35]}, # Temple
-    "MES_OCTUBRE":    {"letter": "LETRA_O", "motion": "circle", "pos": [0.10, 0.35]}, # Eye
-    "MES_NOVIEMBRE":  {"letter": "LETRA_N", "motion": "static", "pos": [0.05, 0.45]}, # Nose
-    "MES_DICIEMBRE":  {"letter": "LETRA_D", "motion": "down",   "pos": [0.00, 0.55]}, # Beard motion
+    # Positions are relative to nose. -X is the avatar's Right side, +X is Left side, +Y is down.
+    
+    # Enero: 'E' at right cheek
+    "MES_ENERO":      {"letter": "LETRA_E", "motion": "circle", "pos": [ -0.10, -0.05]},
+    
+    # Febrero: Index up ('F' or 'Numero_1') at right cheek/temple
+    "MES_FEBRERO":    {"letter": "LETRA_F", "motion": "horiz",  "pos": [ -0.10, -0.15]},
+    
+    # Marzo: 'M' or 3-fingers at right chest/shoulder
+    "MES_MARZO":      {"letter": "LETRA_M", "motion": "down", "pos": [ -0.12,  0.10]},
+    
+    # Abril: Two hands in 'C' shape slowly morphing into 'O' near the face while moving inwards
+    "MES_ABRIL":      {"letter": "LETRA_C", "left_letter": "LETRA_C", "end_letter": "LETRA_O", "left_end_letter": "LETRA_O", "motion": "pinch", "pos": [ -0.15, -0.05], "lpos": [ 0.15, -0.05]},
+    
+    # Mayo: Two hands in fists (S) at cheeks!
+    "MES_MAYO":       {"letter": "LETRA_S", "left_letter": "LETRA_S", "motion": "circle", "pos": [ -0.12, -0.05], "lpos": [0.12, -0.05]},
+    
+    # Junio: 'J' curving down at chest/shoulder
+    "MES_JUNIO":      {"letter": "LETRA_J", "motion": "curve",  "pos": [ -0.12, 0.05]},
+    
+    # Julio: 'L' or expanded 'J' at right chest
+    "MES_JULIO":      {"letter": "LETRA_L", "motion": "j_path", "pos": [ -0.15, 0.10]},
+    
+    # Agosto: 'A' at right shoulder
+    "MES_AGOSTO":     {"letter": "LETRA_A", "motion": "static", "pos": [ -0.18,  0.12]},
+    
+    # Septiembre: Index '1' at nose
+    "MES_SEPTIEMBRE": {"letter": "NUMERO_1", "motion": "down", "pos": [ 0.0, -0.02]},
+    
+    # Octubre: 'O' near right jaw/shoulder
+    "MES_OCTUBRE":    {"letter": "LETRA_O", "motion": "circle", "pos": [ -0.15, -0.05]},
+    
+    # Noviembre: Index '1' at right neck
+    "MES_NOVIEMBRE":  {"letter": "NUMERO_1", "motion": "static", "pos": [ -0.08, 0.08]},
+    
+    # Diciembre: Two hands flat 'B' rubbing at stomach 
+    "MES_DICIEMBRE":  {"letter": "LETRA_B", "left_letter": "LETRA_B", "motion": "horiz", "pos": [ -0.03, 0.28], "lpos": [ 0.03, 0.30]},
+    
+    # === LSCPROPIO MISSING PROCEDURALS ===
+    "CELULAR": {"letter": "LETRA_C", "motion": "static", "pos": [ -0.15, -0.05]},
+    "INTERNET": {"letter": "LETRA_I", "left_letter": "LETRA_I", "motion": "horiz", "pos": [ -0.10, 0.10], "lpos": [ 0.10, 0.10]},
+    "TELEVISION": {"letter": "LETRA_T", "left_letter": "LETRA_T", "motion": "horiz", "pos": [ -0.15, 0.08], "lpos": [ 0.15, 0.08]},
+    "COMPUTADOR": {"letter": "LETRA_C", "left_letter": "LETRA_C", "motion": "horiz", "pos": [ -0.12, 0.15], "lpos": [ 0.12, 0.15]},
+    "VISITAR": {"letter": "LETRA_V", "motion": "j_path", "pos": [ -0.05, 0.05]},
+    "A VECES": {"letter": "LETRA_V", "motion": "circle", "pos": [ -0.05, 0.10]},
+    "ABAJO": {"letter": "LETRA_A", "motion": "down", "pos": [ -0.05, 0.15]},
+    "AÑO": {"letter": "LETRA_A", "left_letter": "LETRA_A", "motion": "circle", "pos": [ -0.05, 0.15], "lpos": [ 0.05, 0.15]},
+    "CAMARA FOTOGRAFICA": {"letter": "LETRA_C", "left_letter": "LETRA_C", "motion": "static", "pos": [ -0.10, -0.05], "lpos": [ 0.10, -0.05]},
+    "DOMINGO": {"letter": "LETRA_D", "motion": "circle", "pos": [ -0.10, 0.10]},
+    "ENCONTRAR": {"letter": "LETRA_E", "motion": "j_path", "pos": [ 0.0, 0.10]},
+    "ENERGIA ELECTRICA": {"letter": "LETRA_E", "motion": "horiz", "pos": [ 0.0, 0.05]},
+    "ESCOGER": {"letter": "LETRA_E", "motion": "down", "pos": [ -0.05, 0.05]},
+    "FECHA": {"letter": "LETRA_F", "motion": "static", "pos": [ -0.05, 0.10]},
+    "IMPRESORA": {"letter": "LETRA_I", "motion": "horiz", "pos": [ 0.0, 0.15]},
+    "INTERPRETAR": {"letter": "LETRA_I", "left_letter": "LETRA_I", "motion": "circle", "pos": [ -0.10, 0.15], "lpos": [ 0.10, 0.15]},
+    "JUEVES": {"letter": "LETRA_J", "motion": "j_path", "pos": [ -0.10, 0.05]},
+    "LUNES": {"letter": "LETRA_L", "motion": "circle", "pos": [ -0.10, 0.05]},
+    "MARTES": {"letter": "LETRA_M", "motion": "circle", "pos": [ -0.10, 0.05]},
+    "MIERCOLES": {"letter": "LETRA_M", "motion": "horiz", "pos": [ -0.10, 0.05]},
+    "SABADO": {"letter": "LETRA_S", "motion": "circle", "pos": [ -0.10, 0.05]},
+    "VIERNES": {"letter": "LETRA_V", "motion": "circle", "pos": [ -0.10, 0.05]},
+    "PAGAR": {"letter": "LETRA_P", "motion": "down", "pos": [ 0.0, 0.10]},
+    "PARECER": {"letter": "LETRA_P", "motion": "j_path", "pos": [ -0.10, 0.05]},
+    "PARTICIPAR": {"letter": "LETRA_P", "left_letter": "LETRA_P", "motion": "horiz", "pos": [ -0.10, 0.15], "lpos": [ 0.10, 0.15]},
+    "PEDIR": {"letter": "LETRA_P", "motion": "circle", "pos": [ -0.05, 0.15]},
+    "PODER": {"letter": "LETRA_P", "left_letter": "LETRA_P", "motion": "down", "pos": [ -0.10, 0.15], "lpos": [ 0.10, 0.15]},
+    "PRECIO": {"letter": "LETRA_P", "motion": "static", "pos": [ -0.05, 0.10]},
+    "TELEFONO": {"letter": "LETRA_Y", "motion": "static", "pos": [ -0.15, -0.05]},
+    "TIEMPO": {"letter": "LETRA_T", "motion": "circle", "pos": [ -0.10, 0.15]},
 }
 
 def load_dynamic_csv(label: str) -> np.ndarray:
@@ -153,62 +209,188 @@ def synthesize_month_procedural(gloss: str):
     
     if feat_count == 1629:
         body  = sampled[:, 0:99].reshape((FRAMES_PER_SIGN, 33, 3))
-        face  = sampled[:, 99:1503].reshape((FRAMES_PER_SIGN, 468, 3))
-        rhand = sampled[:, 1503:1566].reshape((FRAMES_PER_SIGN, 21, 3))
-        lhand = sampled[:, 1566:1629].reshape((FRAMES_PER_SIGN, 21, 3))
+        # The base file usually stores the dominant hand shape in the right hand column
+        lhand = sampled[:, 99:162].reshape((FRAMES_PER_SIGN, 21, 3))
+        rhand = sampled[:, 162:225].reshape((FRAMES_PER_SIGN, 21, 3))
+        face  = sampled[:, 225:1629].reshape((FRAMES_PER_SIGN, 468, 3))
     else:
         # Pose only (99)
         body  = sampled[:, 0:99].reshape((FRAMES_PER_SIGN, 33, 3))
-        face  = np.zeros((FRAMES_PER_SIGN, 468, 3))
-        rhand = np.zeros((FRAMES_PER_SIGN, 21, 3))
         lhand = np.zeros((FRAMES_PER_SIGN, 21, 3))
+        rhand = np.zeros((FRAMES_PER_SIGN, 21, 3))
+        face  = np.zeros((FRAMES_PER_SIGN, 468, 3))
 
-    # 2. Apply target position (offset)
-    # We move the right hand and the arm (wrist/elbow) to the target position
-    target = cfg["pos"] # [x_offset, y_target]
-    
+    # 1.5 Load Left Hand base if two-handed sign
+    left_letter = cfg.get("left_letter")
+    if left_letter:
+        left_data = load_dynamic_csv(left_letter)
+        if left_data is not None:
+            left_frames = left_data.shape[0]
+            left_indices = np.linspace(0, left_frames - 1, FRAMES_PER_SIGN, dtype=int)
+            left_sampled = left_data[left_indices]
+            if left_sampled.shape[1] == 1629:
+                # Often the shape we want for left hand was recorded with the right hand 
+                # (e.g. LETRA_B is usually signed right-handed). So we extract the Right Hand column
+                # and put it into the Left Hand array! Then we just mirror X coords!
+                base_rh = left_sampled[:, 162:225].reshape((FRAMES_PER_SIGN, 21, 3))
+                # Mirror X around the origin to make a right hand look like a left hand
+                base_rh[:, :, 0] = -base_rh[:, :, 0]
+                lhand = base_rh
+                
+    # 1.6 Load End Shapes for Morphing
+    end_rhand_base = None
+    if cfg.get("end_letter"):
+        e_data = load_dynamic_csv(cfg["end_letter"])
+        if e_data is not None:
+            e_frames = e_data.shape[0]
+            e_sampled = e_data[np.linspace(0, e_frames - 1, FRAMES_PER_SIGN, dtype=int)]
+            if e_sampled.shape[1] == 1629:
+                end_rhand_base = e_sampled[:, 162:225].reshape((FRAMES_PER_SIGN, 21, 3))
+                
+    end_lhand_base = None
+    if cfg.get("left_end_letter"):
+        el_data = load_dynamic_csv(cfg["left_end_letter"])
+        if el_data is not None:
+            el_frames = el_data.shape[0]
+            el_sampled = el_data[np.linspace(0, el_frames - 1, FRAMES_PER_SIGN, dtype=int)]
+            if el_sampled.shape[1] == 1629:
+                el_rh = el_sampled[:, 162:225].reshape((FRAMES_PER_SIGN, 21, 3))
+                el_rh[:, :, 0] = -el_rh[:, :, 0]
+                end_lhand_base = el_rh
+
+    # 2. Apply target position RELATIVE to the avatar's nose (pose landmark 0)
+    # This ensures the hand stays anchored to the body regardless of the base landmark values.
+    # target = [x_offset_from_nose, y_offset_from_nose]
+    # Positive x = right side of face, positive y = below nose
+    target = cfg["pos"]  # [x_offset, y_offset] relative to nose
+
     for t in range(FRAMES_PER_SIGN):
-        # Procedural Offset Logic
-        dx, dy = 0, 0
+        # -- Motion modifier (small oscillation on top of the base position) --
+        dx, dy, l_dx, l_dy = 0.0, 0.0, 0.0, 0.0
         progress = t / FRAMES_PER_SIGN
-        
+
         if cfg["motion"] == "circle":
-            dx = 0.05 * np.cos(progress * 2 * np.pi)
-            dy = 0.05 * np.sin(progress * 2 * np.pi)
+            dx = 0.04 * np.cos(progress * 2 * np.pi)
+            dy = 0.04 * np.sin(progress * 2 * np.pi)
         elif cfg["motion"] == "horiz":
-            dx = 0.10 * np.sin(progress * 2 * np.pi)
+            dx = 0.06 * np.sin(progress * 2 * np.pi)
         elif cfg["motion"] == "down":
-            dy = 0.20 * progress
-        elif cfg["motion"] == "curve":
-            dx = 0.05 * np.sin(progress * np.pi)
             dy = 0.10 * progress
+        elif cfg["motion"] == "curve":
+            dx = 0.04 * np.sin(progress * np.pi)
+            dy = 0.06 * progress
         elif cfg["motion"] == "j_path":
-            dx = 0.05 * np.cos(progress * np.pi)
-            dy = 0.20 * progress if progress > 0.5 else 0
-            
-        # Target center (Head is approx 0.5, 0.4)
-        base_x = 0.5 + target[0]
-        base_y = target[1]
-        
-        # Move the right hand (rhand and pose 16)
-        # Calculate current hand center in base landmarks to find translation
-        current_wrist = rhand[t][0] # Landmark 0 is wrist
-        offset_x = (base_x + dx) - current_wrist[0]
-        offset_y = (base_y + dy) - current_wrist[1]
-        
+            dx = 0.04 * np.cos(progress * np.pi)
+            dy = 0.10 * progress if progress > 0.5 else 0
+        elif cfg["motion"] == "pinch":
+            dx = 0.06 * progress      # Right hand moves left (inwards)
+            dy = 0.0
+            l_dx = -0.06 * progress   # Left hand moves right (inwards)
+            l_dy = 0.0
+        else:
+            dx, dy, l_dx, l_dy = 0.0, 0.0, 0.0, 0.0
+
+        # -- Anchor: use the nose (pose landmark 0) as the reference centre --
+        # In MediaPipe normalised coords, the nose sits roughly at (0.5, 0.35)
+        # but we use the actual value from the loaded data so it adapts properly.
+        nose_x = body[t][0][0]  # pose landmark 0 = nose
+        nose_y = body[t][0][1]
+
+        # Desired wrist world position = nose + face-region offset + motion
+        desired_x = nose_x + target[0] + dx
+        desired_y = nose_y + target[1] + dy
+
+        # Morphological interpolation (shape shifting)
+        if end_rhand_base is not None:
+            # Align target shape's wrist definitively to the start shape's wrist
+            aligned_end_rhand = end_rhand_base[t] - end_rhand_base[t][0] + rhand[t][0]
+            # Shift between initial hand shape and target hand shape smoothly
+            rhand[t] = rhand[t] * (1.0 - progress) + aligned_end_rhand * progress
+
+        # -- Translate right hand so its wrist reaches the desired position --
+        # ALWAYS use Pose Wrist (16) as the reliable physical anchor, since 
+        # rhand[t][0] might be [0,0,0] if MediaPipe lost high-res hand tracking.
+        current_wrist = body[t][16]
+        offset_x = desired_x - current_wrist[0]
+        offset_y = desired_y - current_wrist[1]
+
+        # Inject artificial Z-depth reach as hands approach center
+        # Max reach is at 50% progress, pushing arms FORWARD toward camera (negative Z)
+        offset_z = -0.22 * np.sin(progress * np.pi)
+
+        # Shift the detailed hand mesh
+        # If the hand mesh was tracked, it shifts perfectly. 
+        # If it was [0,0,0], it collapses into a point at the wrist.
         rhand[t][:, 0] += offset_x
         rhand[t][:, 1] += offset_y
-        
-        # Move pose hand landmarks (16, 18, 20, 22)
-        hand_indices = [16, 18, 20, 22]
-        for idx in hand_indices:
+        rhand[t][:, 2] += offset_z
+
+        # Adjust arm to follow wrist
+        # Pose right wrist is index 16
+        for idx in [16, 18, 20, 22]:
             body[t][idx][0] += offset_x
             body[t][idx][1] += offset_y
+            body[t][idx][2] += offset_z
+
+        # Adjust elbow (14) to trail behind wrist naturally with Z push
+        body[t][14][0] = body[t][16][0] + 0.08
+        body[t][14][1] = body[t][16][1] + 0.15
+        body[t][14][2] = body[t][16][2] + 0.05
+
+        # -- Left Hand processing --
+        if left_letter:
+            # left target offset from nose
+            ltx = cfg.get("lpos", [0])[0]
+            lty = cfg.get("lpos", [0, 0])[1] if len(cfg.get("lpos", [0])) > 1 else 0
             
-        # Adjust Elbow (14) to follow roughly
-        body[t][14][0] = body[t][16][0] + 0.1
-        body[t][14][1] = body[t][16][1] + 0.2
-        
+            l_desired_x = nose_x + ltx + l_dx
+            l_desired_y = nose_y + lty + l_dy
+            
+            l_current_wrist = body[t][15] # Left pose wrist
+            
+            # Morphological interpolation (shape shifting)
+            if end_lhand_base is not None:
+                aligned_end_lhand = end_lhand_base[t] - end_lhand_base[t][0] + lhand[t][0]
+                lhand[t] = lhand[t] * (1.0 - progress) + aligned_end_lhand * progress
+                
+            l_offset_x = l_desired_x - l_current_wrist[0]
+            l_offset_y = l_desired_y - l_current_wrist[1]
+            
+            lhand[t][:, 0] += l_offset_x
+            lhand[t][:, 1] += l_offset_y
+            lhand[t][:, 2] += offset_z
+            
+            for idx in [15, 17, 19, 21]:
+                body[t][idx][0] += l_offset_x
+                body[t][idx][1] += l_offset_y
+                body[t][idx][2] += offset_z
+                
+            # Adjust left elbow (13)
+            body[t][13][0] = body[t][15][0] - 0.08
+            body[t][13][1] = body[t][15][1] + 0.15
+            body[t][13][2] = body[t][15][2] + 0.05
+        else:
+            # Single-handed sign: Force the left arm to rest down by the waist
+            # and ignore any spurious finger movements from the base file.
+            lhand[t] = np.zeros((21, 3))
+            
+            # Left hip is 23
+            hip_x, hip_y = body[t][23][0], body[t][23][1]
+            rest_x = hip_x + 0.10
+            rest_y = hip_y + 0.05
+            
+            l_current_wrist = body[t][15]
+            l_offset_x = rest_x - l_current_wrist[0]
+            l_offset_y = rest_y - l_current_wrist[1]
+            
+            for idx in [15, 17, 19, 21]:
+                body[t][idx][0] += l_offset_x
+                body[t][idx][1] += l_offset_y
+                
+            # Left elbow (13)
+            body[t][13][0] = body[t][15][0] + 0.05
+            body[t][13][1] = body[t][15][1] - 0.10 # elbow slightly above wrist when resting
+            
     return body, face, rhand, lhand
 
 
@@ -384,46 +566,46 @@ def synthesize_sequence(glosses: List[str]) -> dict:
         if gloss_upper in landmark_cache:
             body_arr, face_arr, rhand_arr, lhand_arr = landmark_cache[gloss_upper]
         else:
-            # 1. Procedural Month Synthesis
-            if gloss_upper.startswith("MES_"):
+            sign_id = GLOSS_TO_SIGNID.get(gloss_upper)
+            dynamic_df = None
+            
+            # 1. Priority: Check if any dynamic/override file exists natively
+            if os.path.exists(os.path.join(DYNAMIC_LANDMARKS_DIR, f"{gloss_upper}.csv")):
+                dynamic_df = load_dynamic_csv(gloss_upper)
+                
+            # 2. Check fallback for Procedural synthesis
+            if dynamic_df is None and (gloss_upper.startswith("MES_") or gloss_upper in MONTH_CONFIG):
                 body_arr, face_arr, rhand_arr, lhand_arr = synthesize_month_procedural(gloss_upper)
-            else:
-                sign_id = GLOSS_TO_SIGNID.get(gloss_upper)
-                dynamic_df = None
-                # Priority: Check if it's a dynamic prefix (LETRA_ or NUMERO_)
-                if gloss_upper.startswith("LETRA_") or gloss_upper.startswith("NUMERO_"):
-                    dynamic_df = load_dynamic_csv(gloss_upper)
-                    
-                if dynamic_df is not None:
-                    # Use dynamic landmarks
-                    body_arr  = csv_to_landmark_array(dynamic_df, 33, FRAMES_PER_SIGN)
-                    face_arr  = csv_to_landmark_array(dynamic_df, 468, FRAMES_PER_SIGN) 
-                    rhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
-                    lhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
-                elif sign_id is not None:
-                    # Load landmarks from LSC50
-                    body_df  = load_lsc50_csv(LSC50_BODY_DIR,  sign_id, gloss)
-                    face_df  = load_lsc50_csv(LSC50_FACE_DIR,  sign_id, gloss)
-                    rhand_df = load_lsc50_csv(LSC50_RHAND_DIR, sign_id, gloss)
-                    lhand_df = load_lsc50_csv(LSC50_LHAND_DIR, sign_id, gloss)
-                    
-                    if body_df is None:
-                        logging.warning(f"No samples found for {gloss} (sign_id={sign_id}) - using placeholder")
-                        body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
-                        face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
-                        rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
-                        lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
-                    else:
-                        body_arr  = csv_to_landmark_array(body_df, 33, FRAMES_PER_SIGN)
-                        face_arr  = csv_to_landmark_array(face_df, 468, FRAMES_PER_SIGN)
-                        rhand_arr = csv_to_landmark_array(rhand_df, 21, FRAMES_PER_SIGN)
-                        lhand_arr = csv_to_landmark_array(lhand_df, 21, FRAMES_PER_SIGN)
-                else:
-                    logging.warning(f"Gloss {gloss} not found in any dataset - using placeholder")
+            elif dynamic_df is not None:
+                # Use dynamic landmarks
+                body_arr  = csv_to_landmark_array(dynamic_df, 33, FRAMES_PER_SIGN)
+                face_arr  = csv_to_landmark_array(dynamic_df, 468, FRAMES_PER_SIGN) 
+                rhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
+                lhand_arr = csv_to_landmark_array(dynamic_df, 21, FRAMES_PER_SIGN)
+            elif sign_id is not None:
+                # Load landmarks from LSC50
+                body_df  = load_lsc50_csv(LSC50_BODY_DIR,  sign_id, gloss)
+                face_df  = load_lsc50_csv(LSC50_FACE_DIR,  sign_id, gloss)
+                rhand_df = load_lsc50_csv(LSC50_RHAND_DIR, sign_id, gloss)
+                lhand_df = load_lsc50_csv(LSC50_LHAND_DIR, sign_id, gloss)
+                
+                if body_df is None:
+                    logging.warning(f"No samples found for {gloss} (sign_id={sign_id}) - using placeholder")
                     body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
                     face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
                     rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
                     lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                else:
+                    body_arr  = csv_to_landmark_array(body_df, 33, FRAMES_PER_SIGN)
+                    face_arr  = csv_to_landmark_array(face_df, 468, FRAMES_PER_SIGN)
+                    rhand_arr = csv_to_landmark_array(rhand_df, 21, FRAMES_PER_SIGN)
+                    lhand_arr = csv_to_landmark_array(lhand_df, 21, FRAMES_PER_SIGN)
+            else:
+                logging.warning(f"Gloss {gloss} not found in any dataset - using placeholder")
+                body_arr  = np.zeros((FRAMES_PER_SIGN, 33, 3))
+                face_arr  = np.zeros((FRAMES_PER_SIGN, 468, 3))
+                rhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
+                lhand_arr = np.zeros((FRAMES_PER_SIGN, 21, 3))
             
             # Store in cache
             landmark_cache[gloss_upper] = (body_arr, face_arr, rhand_arr, lhand_arr)
