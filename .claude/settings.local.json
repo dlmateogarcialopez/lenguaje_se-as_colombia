@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8765/)",
+      "Bash(curl -s http://localhost:8765/signs/index.json)",
+      "Bash(curl -s http://localhost:8765/signs/bien.json)",
+      "Bash(curl -sL -o /d/lscprueba3/prototipo/static/avatar.vrm \"https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm\")",
+      "Bash(curl -sL --ssl-no-revoke -o static/avatar.vrm \"https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm\")",
+      "Bash(curl -L --ssl-no-revoke -o static/avatar.vrm \"https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm\")",
+      "Bash(powershell -Command ' *)",
+      "Bash(curl -s -o /dev/null -w \"video lunes: %{http_code}\\\\n\" http://localhost:8765/videos/lunes.m4v -r 0-100)",
+      "Bash(curl *)"
+    ]
+  }
+}
