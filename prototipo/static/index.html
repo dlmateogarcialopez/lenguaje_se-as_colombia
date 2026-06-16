@@ -281,6 +281,23 @@ function orientarMuneca(nombre, hand, lado, lerp = 0.55) {
   hueso.quaternion.slerp(localQ, lerp);
 }
 
+// MediaPipe etiqueta manos asumiendo video espejo -> etiquetas no confiables.
+// Asignar cada mano a la muñeca del cuerpo (15 izq, 16 der) mas cercana.
+const MANO_VACIA = [[], [], []];
+function asignarManos(f) {
+  const [xs, ys] = f.pose;
+  const dist = (h, wi) => Math.hypot(h[0][0] - xs[wi], h[1][0] - ys[wi]);
+  const manos = [f.l_hand, f.r_hand].filter(h => h[0].length === 21);
+  if (manos.length === 0) return { l: MANO_VACIA, r: MANO_VACIA };
+  if (manos.length === 1) {
+    const h = manos[0];
+    return dist(h, 15) <= dist(h, 16) ? { l: h, r: MANO_VACIA } : { l: MANO_VACIA, r: h };
+  }
+  const [a, b] = manos;
+  return dist(a, 15) + dist(b, 16) <= dist(a, 16) + dist(b, 15)
+    ? { l: a, r: b } : { l: b, r: a };
+}
+
 const _restX = new THREE.Vector3(1, 0, 0);
 function aplicarFrame(f) {
   actualizarEsqueleto(f);
@@ -288,21 +305,30 @@ function aplicarFrame(f) {
   if (f.pose[0].length !== 33) return;
   if (!restDirs) calcularRest();
 
-  // torso: linea de hombros (12 der -> 11 izq debe ser +X)
-  const chest = vrm.humanoid.getNormalizedBoneNode('chest') || vrm.humanoid.getNormalizedBoneNode('spine');
-  if (chest) {
-    _q3.setFromUnitVectors(_restX, dirLm(f.pose, 12, 11));
-    chest.quaternion.slerp(_q3, 0.25);
+  // limita una rotacion a un angulo maximo (evita movimientos bruscos)
+  function clampQuat(q, maxRad) {
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+    if (ang > maxRad) q.slerp(new THREE.Quaternion(), 1 - maxRad / ang);
+    return q;
   }
 
-  // cabeza: centro de hombros -> nariz (reposo +Y) + inclinacion por ojos
+  // torso: linea de hombros solo en plano XY (z = ruido), maximo ~10°
+  const chest = vrm.humanoid.getNormalizedBoneNode('chest') || vrm.humanoid.getNormalizedBoneNode('spine');
+  if (chest) {
+    const [xs, ys] = f.pose;
+    const sh = new THREE.Vector3(xs[11] - xs[12], -(ys[11] - ys[12]), 0).normalize();
+    _q3.setFromUnitVectors(_restX, sh);
+    chest.quaternion.slerp(clampQuat(_q3, 0.17), 0.15);
+  }
+
+  // cabeza: centro de hombros -> nariz, sin profundidad, maximo ~20°
   const neck = vrm.humanoid.getNormalizedBoneNode('neck') || vrm.humanoid.getNormalizedBoneNode('head');
   if (neck) {
-    const [xs, ys, zs] = f.pose;
-    const cx = (xs[11] + xs[12]) / 2, cy = (ys[11] + ys[12]) / 2, cz = (zs[11] + zs[12]) / 2;
-    const dirCabeza = new THREE.Vector3(xs[0] - cx, -(ys[0] - cy), -(zs[0] - cz) * Z_FACTOR).normalize();
+    const [xs, ys] = f.pose;
+    const cx = (xs[11] + xs[12]) / 2, cy = (ys[11] + ys[12]) / 2;
+    const dirCabeza = new THREE.Vector3(xs[0] - cx, -(ys[0] - cy), 0).normalize();
     _q3.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirCabeza);
-    neck.quaternion.slerp(_q3, 0.3);
+    neck.quaternion.slerp(clampQuat(_q3, 0.35), 0.2);
   }
 
   // brazos (MediaPipe: 11/13/15 izq, 12/14/16 der)
@@ -311,15 +337,16 @@ function aplicarFrame(f) {
   apuntarHueso('rightUpperArm', dirLm(f.pose, 12, 14));
   apuntarHueso('rightLowerArm', dirLm(f.pose, 14, 16));
 
-  // manos: orientacion muñeca + dedos (curls de Kalidokit)
-  if (f.l_hand[0].length === 21) {
-    orientarMuneca('leftHand', f.l_hand, 'left');
-    const rig = Kalidokit.Hand.solve(aLandmarks(f.l_hand), 'Left');
+  // manos: asignadas por cercania, orientacion muñeca + dedos (curls de Kalidokit)
+  const manos = asignarManos(f);
+  if (manos.l[0].length === 21) {
+    orientarMuneca('leftHand', manos.l, 'left');
+    const rig = Kalidokit.Hand.solve(aLandmarks(manos.l), 'Left');
     if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Left' + d + ph, rig['Left' + d + ph]);
   }
-  if (f.r_hand[0].length === 21) {
-    orientarMuneca('rightHand', f.r_hand, 'right');
-    const rig = Kalidokit.Hand.solve(aLandmarks(f.r_hand), 'Right');
+  if (manos.r[0].length === 21) {
+    orientarMuneca('rightHand', manos.r, 'right');
+    const rig = Kalidokit.Hand.solve(aLandmarks(manos.r), 'Right');
     if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Right' + d + ph, rig['Right' + d + ph]);
   }
 }
