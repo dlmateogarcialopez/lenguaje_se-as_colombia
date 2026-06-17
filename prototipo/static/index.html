@@ -237,10 +237,16 @@ const FALANGES = ['Proximal', 'Intermediate', 'Distal'];
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
 const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4();
 
-const Z_FACTOR = 0.65; // z de MediaPipe es ruidoso: amortiguar profundidad
+// Para landmarks normalizados a imagen (sin world): z es ruidoso, se amortigua.
+const Z_FACTOR = 0.75;
 function dirLm(arr, a, b) {
   const [xs, ys, zs] = arr;
   return new THREE.Vector3(xs[b] - xs[a], -(ys[b] - ys[a]), -(zs[b] - zs[a]) * Z_FACTOR).normalize();
+}
+// Para pose_world_landmarks (metros 3D reales): z es confiable, sin amortiguar.
+function dirLmWorld(arr, a, b) {
+  const [xs, ys, zs] = arr;
+  return new THREE.Vector3(xs[b] - xs[a], -(ys[b] - ys[a]), -(zs[b] - zs[a])).normalize();
 }
 
 let restDirs = null;
@@ -249,6 +255,7 @@ function calcularRest() {
   const cadenas = [
     ['leftUpperArm', 'leftLowerArm'], ['leftLowerArm', 'leftHand'],
     ['rightUpperArm', 'rightLowerArm'], ['rightLowerArm', 'rightHand'],
+    ['leftHand', 'leftMiddleProximal'], ['rightHand', 'rightMiddleProximal'],
   ];
   for (const [hueso, hijo] of cadenas) {
     const nh = vrm.humanoid.getNormalizedBoneNode(hijo);
@@ -272,8 +279,10 @@ function orientarMuneca(nombre, hand, lado, lerp = 0.55) {
   const dir = dirLm(hand, 0, 9);                 // muñeca -> nudillo medio
   const vI = dirLm(hand, 0, 5);
   const vP = dirLm(hand, 0, 17);
+  // Normal de la palma. Invertir SOLO para mano izquierda (orden de cross
+  // depende de la quiralidad de cada mano fisica).
   let normal = new THREE.Vector3().crossVectors(vI, vP).normalize();
-  if (lado === 'right') normal.negate();
+  if (lado === 'left') normal.negate();
   const t3 = new THREE.Vector3().crossVectors(dir, normal).normalize();
   const n2 = new THREE.Vector3().crossVectors(t3, dir).normalize();
   _m1.makeBasis(dir, n2, t3);
@@ -286,6 +295,93 @@ function orientarMuneca(nombre, hand, lado, lerp = 0.55) {
   hueso.parent.getWorldQuaternion(_q1);
   const localQ = _q2.copy(_q1).invert().multiply(_q3);
   hueso.quaternion.slerp(localQ, lerp);
+}
+
+// ---------- One Euro Filter ----------
+// Pasa-bajo adaptativo: cuando el punto se mueve rapido deja pasar mas;
+// cuando esta quieto suaviza fuerte. Reduce jitter sin meter retraso visible.
+class OneEuro {
+  constructor(mincutoff = 1.5, beta = 0.05, dcutoff = 1) {
+    this.mincutoff = mincutoff; this.beta = beta; this.dcutoff = dcutoff;
+    this.xPrev = null; this.dxPrev = 0; this.tPrev = 0;
+  }
+  _alpha(cutoff, te) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / te);
+  }
+  filter(x, t) {
+    if (this.xPrev === null) { this.xPrev = x; this.tPrev = t; return x; }
+    const te = Math.max(t - this.tPrev, 1e-3);
+    const dx = (x - this.xPrev) / te;
+    const aD = this._alpha(this.dcutoff, te);
+    const edx = aD * dx + (1 - aD) * this.dxPrev;
+    const cutoff = this.mincutoff + this.beta * Math.abs(edx);
+    const a = this._alpha(cutoff, te);
+    const hat = a * x + (1 - a) * this.xPrev;
+    this.xPrev = hat; this.dxPrev = edx; this.tPrev = t;
+    return hat;
+  }
+  reset() { this.xPrev = null; this.dxPrev = 0; }
+}
+
+// Solo filtramos los landmarks que el retargeting consume.
+// Pose: nariz + hombros/codos/munecas. Manos: las 21 (Kalidokit las usa).
+const POSE_FILTRAR = [0, 11, 12, 13, 14, 15, 16];
+
+let filtros = { pose: null, pose_world: null, l_hand: null, r_hand: null };
+function crearBanco(n) {
+  return Array.from({ length: n }, () => [new OneEuro(), new OneEuro(), new OneEuro()]);
+}
+function reiniciarSuavizado() {
+  if (!filtros.pose) {
+    filtros = { pose: crearBanco(33), pose_world: crearBanco(33),
+                l_hand: crearBanco(21), r_hand: crearBanco(21) };
+  } else {
+    for (const k of Object.keys(filtros)) {
+      for (const ejes of filtros[k]) for (const f of ejes) f.reset();
+    }
+  }
+  manoCache.l = null; manoCache.r = null;
+}
+
+// Buffers reutilizables: evita asignar 9 arrays + 225 pushes por frame (~13k allocs/s a 60fps).
+const _outPose = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
+const _outPoseW = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
+const _outLH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+const _outRH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+
+function filtrarSubset(arr, banco, out, t) {
+  if (arr[0].length !== 33) return arr;
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 33; i++) out[j][i] = arr[j][i];
+  for (const i of POSE_FILTRAR) {
+    out[0][i] = banco[i][0].filter(arr[0][i], t);
+    out[1][i] = banco[i][1].filter(arr[1][i], t);
+    out[2][i] = banco[i][2].filter(arr[2][i], t);
+  }
+  return out;
+}
+const filtrarPose = (arr, t) => filtrarSubset(arr, filtros.pose, _outPose, t);
+const filtrarPoseWorld = (arr, t) => filtrarSubset(arr, filtros.pose_world, _outPoseW, t);
+function filtrarMano(arr, banco, out, t) {
+  if (arr[0].length !== 21) return arr;
+  for (let i = 0; i < 21; i++) {
+    out[0][i] = banco[i][0].filter(arr[0][i], t);
+    out[1][i] = banco[i][1].filter(arr[1][i], t);
+    out[2][i] = banco[i][2].filter(arr[2][i], t);
+  }
+  return out;
+}
+
+// Continuidad: si MediaPipe pierde una mano un frame, no soltarla a reposo durante HOLD_MS.
+const HOLD_MS = 300;
+const manoCache = { l: null, r: null };
+function manoConContinuidad(lado, arr, t) {
+  if (arr[0].length === 21) {
+    manoCache[lado] = { arr, t };
+    return arr;
+  }
+  const c = manoCache[lado];
+  return (c && t - c.t < HOLD_MS) ? c.arr : arr;
 }
 
 // MediaPipe etiqueta manos asumiendo video espejo -> etiquetas no confiables.
@@ -306,7 +402,14 @@ function asignarManos(f) {
 }
 
 const _restX = new THREE.Vector3(1, 0, 0);
-function aplicarFrame(f) {
+const _POSE_VACIA = [[], [], []];
+function aplicarFrame(fIn, t) {
+  const f = {
+    pose: filtrarPose(fIn.pose, t),
+    pose_world: fIn.pose_world ? filtrarPoseWorld(fIn.pose_world, t) : _POSE_VACIA,
+    l_hand: filtrarMano(manoConContinuidad('l', fIn.l_hand, t), filtros.l_hand, _outLH, t),
+    r_hand: filtrarMano(manoConContinuidad('r', fIn.r_hand, t), filtros.r_hand, _outRH, t),
+  };
   actualizarEsqueleto(f);
   if (!vrm) return;
   if (f.pose[0].length !== 33) return;
@@ -338,21 +441,23 @@ function aplicarFrame(f) {
     neck.quaternion.slerp(clampQuat(_q3, 0.35), 0.2);
   }
 
-  // brazos (MediaPipe: 11/13/15 izq, 12/14/16 der)
-  apuntarHueso('leftUpperArm', dirLm(f.pose, 11, 13));
-  apuntarHueso('leftLowerArm', dirLm(f.pose, 13, 15));
-  apuntarHueso('rightUpperArm', dirLm(f.pose, 12, 14));
-  apuntarHueso('rightLowerArm', dirLm(f.pose, 14, 16));
+  // brazos: usar pose_world (metros, z confiable) si esta disponible; si no, imagen 2.5D
+  const w = f.pose_world && f.pose_world[0].length === 33 ? f.pose_world : null;
+  const dirBrazo = (a, b) => w ? dirLmWorld(w, a, b) : dirLm(f.pose, a, b);
+  apuntarHueso('leftUpperArm',  dirBrazo(11, 13));
+  apuntarHueso('leftLowerArm',  dirBrazo(13, 15));
+  apuntarHueso('rightUpperArm', dirBrazo(12, 14));
+  apuntarHueso('rightLowerArm', dirBrazo(14, 16));
 
-  // manos: asignadas por cercania, orientacion muñeca + dedos (curls de Kalidokit)
+  // manos: asignadas por cercania
   const manos = asignarManos(f);
   if (manos.l[0].length === 21) {
-    orientarMuneca('leftHand', manos.l, 'left');
+    apuntarHueso('leftHand',  dirLm(manos.l, 0, 9));    // muñeca -> nudillo medio
     const rig = Kalidokit.Hand.solve(aLandmarks(manos.l), 'Left');
     if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Left' + d + ph, rig['Left' + d + ph]);
   }
   if (manos.r[0].length === 21) {
-    orientarMuneca('rightHand', manos.r, 'right');
+    apuntarHueso('rightHand', dirLm(manos.r, 0, 9));
     const rig = Kalidokit.Hand.solve(aLandmarks(manos.r), 'Right');
     if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Right' + d + ph, rig['Right' + d + ph]);
   }
@@ -437,12 +542,12 @@ document.getElementById('texto').addEventListener('keydown', e => { if (e.key ==
 // interpolacion lineal entre frames para movimiento suave
 function interpolar(f1, f2, t) {
   const out = {};
-  for (const k of ['pose', 'l_hand', 'r_hand']) {
+  for (const k of ['pose', 'pose_world', 'l_hand', 'r_hand']) {
     const a = f1[k], b = f2[k];
-    if (a[0].length && a[0].length === b[0].length) {
+    if (a && b && a[0] && b[0] && a[0].length && a[0].length === b[0].length) {
       out[k] = [0, 1, 2].map(j => a[j].map((v, i) => v + (b[j][i] - v) * t));
     } else {
-      out[k] = a;
+      out[k] = a || _POSE_VACIA;
     }
   }
   return out;
@@ -450,13 +555,17 @@ function interpolar(f1, f2, t) {
 
 // ---------- bucle ----------
 const reloj = new THREE.Clock();
+reiniciarSuavizado();   // crea el banco de filtros
+let tAcum = 0;
 function animar() {
   requestAnimationFrame(animar);
   const dt = reloj.getDelta();
+  tAcum += dt * 1000;
 
   if (!actual && cola.length) {
     actual = cola.shift();
     frameTime = 0;
+    reiniciarSuavizado();
     estado.innerHTML = 'Señando: <span class="actual">' + actual.sign + '</span>' +
       (cola.length ? ' · siguientes: ' + cola.map(c => c.sign).join(', ') : '');
     const vid = document.getElementById('video');
@@ -477,9 +586,9 @@ function animar() {
       actual = null;
       if (!cola.length) estado.innerHTML += ' ✓';
     } else if (i + 1 < actual.frames.length) {
-      aplicarFrame(interpolar(actual.frames[i], actual.frames[i + 1], frameTime - i));
+      aplicarFrame(interpolar(actual.frames[i], actual.frames[i + 1], frameTime - i), tAcum);
     } else {
-      aplicarFrame(actual.frames[i]);
+      aplicarFrame(actual.frames[i], tAcum);
     }
   } else {
     posturaReposo();

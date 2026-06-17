@@ -56,9 +56,13 @@ def extraer(video_path, pose_lm, hand_lm):
         hand_res = hand_lm.detect_for_video(img, ts)
 
         pose = [[], [], []]
+        pose_world = [[], [], []]
         if pose_res.pose_landmarks:
             for lm in pose_res.pose_landmarks[0]:
                 pose[0].append(lm.x); pose[1].append(lm.y); pose[2].append(lm.z)
+        if pose_res.pose_world_landmarks:
+            for lm in pose_res.pose_world_landmarks[0]:
+                pose_world[0].append(lm.x); pose_world[1].append(lm.y); pose_world[2].append(lm.z)
 
         l_hand = [[], [], []]
         r_hand = [[], [], []]
@@ -67,7 +71,8 @@ def extraer(video_path, pose_lm, hand_lm):
             for lm in hand_res.hand_landmarks[i]:
                 destino[0].append(lm.x); destino[1].append(lm.y); destino[2].append(lm.z)
 
-        frames.append({"pose": pose, "l_hand": l_hand, "r_hand": r_hand})
+        frames.append({"pose": pose, "pose_world": pose_world,
+                       "l_hand": l_hand, "r_hand": r_hand})
         ts += int(1000 / fps)
     cap.release()
     return fps, frames
@@ -99,7 +104,9 @@ def main():
             fps, frames = extraer(ruta, pose_lm, hand_lm)
         ext = os.path.splitext(ruta)[1].lower()
         vid_dest = nombre + (".mp4" if ext == ".mp4" else ".m4v")
-        shutil.copy(ruta, os.path.join(OUT_VID, vid_dest))
+        out_vid_path = os.path.join(OUT_VID, vid_dest)
+        if not os.path.exists(out_vid_path):
+            shutil.copy(ruta, out_vid_path)
         with open(os.path.join(OUT, nombre + ".json"), "w", encoding="utf-8") as f:
             json.dump({"sign": palabra, "fps": fps, "source": "LSCPROPIO",
                        "video": "videos/" + vid_dest, "frames": frames}, f)
