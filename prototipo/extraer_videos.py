@@ -101,9 +101,9 @@ def main():
         vid_dest = nombre + (".mp4" if ext == ".mp4" else ".m4v")
         shutil.copy(ruta, os.path.join(OUT_VID, vid_dest))
         with open(os.path.join(OUT, nombre + ".json"), "w", encoding="utf-8") as f:
-            json.dump({"sign": palabra, "fps": fps, "video": "videos/" + vid_dest,
-                       "frames": frames}, f)
-        index[nombre] = {"label": palabra, "video": "videos/" + vid_dest}
+            json.dump({"sign": palabra, "fps": fps, "source": "LSCPROPIO",
+                       "video": "videos/" + vid_dest, "frames": frames}, f)
+        index[nombre] = {"label": palabra, "video": "videos/" + vid_dest, "source": "LSCPROPIO"}
         print(f"{palabra}: {len(frames)} frames @ {fps:.1f}fps")
 
     with open(idx_path, "w", encoding="utf-8") as f:

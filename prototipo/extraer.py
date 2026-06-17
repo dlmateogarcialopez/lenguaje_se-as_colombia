@@ -32,8 +32,8 @@ def main():
                     })
                 name = slug(sign)
                 with open(os.path.join(OUT, name + ".json"), "w", encoding="utf-8") as f:
-                    json.dump({"sign": sign, "fps": 15, "frames": frames}, f)
-                index[name] = sign
+                    json.dump({"sign": sign, "fps": 15, "source": "LSCS45", "frames": frames}, f)
+                index[name] = {"label": sign, "video": None, "source": "LSCS45"}
                 print(name, len(frames), "frames")
 
     with open(os.path.join(OUT, "index.json"), "w", encoding="utf-8") as f:
