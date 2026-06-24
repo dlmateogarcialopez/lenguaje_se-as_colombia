@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Traductor LSC — Prototipo</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee; }
+  #ui { position: fixed; top: 0; left: 0; right: 0; padding: 14px; background: #1b1b1bcc; display: flex; gap: 8px; align-items: center; z-index: 10; }
+  #texto { flex: 1; padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+  button { padding: 10px 18px; font-size: 16px; border-radius: 6px; border: 0; background: #2e7d32; color: white; cursor: pointer; }
+  button:hover { background: #388e3c; }
+  #estado { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 22px; z-index: 10; }
+  #estado .actual { color: #8bc34a; font-weight: bold; }
+  #estado .omitida { color: #e57373; }
+  #vocab { position: fixed; top: 70px; right: 14px; bottom: 60px; width: 260px; z-index: 10; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  #vocab .grupo h4 { margin: 0 0 6px 0; font-size: 12px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
+  #vocab .grupo h4 .punto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  #vocab .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  #vocab .chip { background: #2a2a33; border: 1px solid #444; color: #ccc; padding: 4px 10px; border-radius: 14px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  #vocab .chip:hover { background: #2e7d32; color: #fff; }
+  #vocab .chip .badge { font-size: 10px; padding: 1px 5px; border-radius: 8px; font-weight: bold; }
+  .src-LSCPROPIO { background: #1976d2; color: #fff; }
+  .src-LSCS45 { background: #f57c00; color: #fff; }
+  .src-LSC50 { background: #7b1fa2; color: #fff; }
+  #video { position: fixed; top: 70px; left: 14px; width: 320px; border-radius: 8px; border: 2px solid #444; z-index: 10; display: none; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <input id="texto" placeholder="Escribe texto, ej: bienvenido, bien, ayudar..." autofocus>
+  <button id="traducir">Traducir</button>
+  <select id="avatarSel" style="padding:10px;font-size:15px;border-radius:6px;background:#222;color:#eee;border:1px solid #444;"></select>
+</div>
+<div id="vocab"></div>
+<video id="video" muted playsinline></video>
+<div id="estado">Cargando avatar...</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
+    "kalidokit": "https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/+esm"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import * as Kalidokit from 'kalidokit';
+
+const estado = document.getElementById('estado');
+const vocabDiv = document.getElementById('vocab');
+
+// ---------- escena ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202028);
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 50);
+camera.position.set(0.42, 1.35, 2.3);
+camera.lookAt(0.42, 1.25, 0);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const luz = new THREE.DirectionalLight(0xffffff, 1.4);
+luz.position.set(1, 2, 2);
+scene.add(luz);
+const piso = new THREE.Mesh(
+  new THREE.CircleGeometry(1.5, 48),
+  new THREE.MeshStandardMaterial({ color: 0x2a2a33 })
+);
+piso.rotation.x = -Math.PI / 2;
+scene.add(piso);
+
+// ---------- avatar VRM ----------
+const AVATARES = {
+  'VRoid': 'avatars/8329890252317737768.vrm',
+  'Sample VRM1': 'avatar.vrm',
+  'Alicia (VRM0)': 'avatars/AliciaSolid_vrm-0.51.vrm',
+  'VRM.glb': 'avatars/VRM.glb',
+  'avatar_glb': 'avatars/avatar_glb.glb',
+  'persona': 'avatars/persona.glb',
+};
+let vrm = null;
+const loader = new GLTFLoader();
+loader.register(p => new VRMLoaderPlugin(p));
+
+function cargarAvatar(url) {
+  estado.textContent = 'Cargando avatar...';
+  loader.load(url, gltf => {
+    const nuevo = gltf.userData.vrm;
+    if (!nuevo || !nuevo.humanoid) {
+      estado.innerHTML = '<span class="omitida">' + url + ' no es VRM (sin esqueleto humanoide). No usable.</span>';
+      return;
+    }
+    if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
+    vrm = nuevo;
+    restDirs = null;
+    VRMUtils.removeUnnecessaryJoints(gltf.scene);
+    if (vrm.meta?.metaVersion === '0') VRMUtils.rotateVRM0(vrm);
+    scene.add(vrm.scene);
+    estado.textContent = 'Avatar listo. Escribe texto.';
+  }, undefined, err => {
+    estado.innerHTML = '<span class="omitida">Error cargando ' + url + ': ' + err.message + '</span>';
+  });
+}
+
+const avatarSel = document.getElementById('avatarSel');
+for (const [nombre, url] of Object.entries(AVATARES)) {
+  const o = document.createElement('option');
+  o.value = url; o.textContent = nombre;
+  avatarSel.appendChild(o);
+}
+avatarSel.onchange = () => cargarAvatar(avatarSel.value);
+cargarAvatar(AVATARES['VRoid']);
+
+// ---------- esqueleto de landmarks (al lado del avatar) ----------
+const POSE_CONN = [
+  [11,12],[11,13],[13,15],[12,14],[14,16],
+  [11,23],[12,24],[23,24],
+  [0,11],[0,12],
+  [23,25],[25,27],[24,26],[26,28]
+];
+const HAND_CONN = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[0,17],[17,18],[18,19],[19,20]
+];
+const ESQ_X = 0.85;       // separación lateral del avatar
+const ESQ_Y = 1.35;       // altura de hombros
+const ESQ_ESCALA = 0.18;  // ancho de hombros en metros
+
+function crearEsqueleto(nPuntos, conn, radio, color) {
+  const grupo = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const geo = new THREE.SphereGeometry(radio, 8, 8);
+  const puntos = [];
+  for (let i = 0; i < nPuntos; i++) {
+    const m = new THREE.Mesh(geo, mat);
+    grupo.add(m); puntos.push(m);
+  }
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(conn.length * 6), 3));
+  const lineas = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0xaaaaaa }));
+  grupo.add(lineas);
+  scene.add(grupo);
+  return { grupo, puntos, lineas, conn };
+}
+
+const esqPose = crearEsqueleto(33, POSE_CONN, 0.014, 0x4fc3f7);
+const esqManoI = crearEsqueleto(21, HAND_CONN, 0.006, 0xffb74d);
+const esqManoD = crearEsqueleto(21, HAND_CONN, 0.006, 0xf06292);
+
+function actualizarEsq(esq, arr, transformar) {
+  const ok = arr && arr[0].length === esq.puntos.length;
+  esq.grupo.visible = ok;
+  if (!ok) return;
+  const [xs, ys, zs] = arr;
+  const pos = esq.lineas.geometry.attributes.position;
+  for (let i = 0; i < xs.length; i++) {
+    esq.puntos[i].position.copy(transformar(xs[i], ys[i], zs[i]));
+  }
+  esq.conn.forEach(([a, b], i) => {
+    const pa = esq.puntos[a].position, pb = esq.puntos[b].position;
+    pos.setXYZ(i * 2, pa.x, pa.y, pa.z);
+    pos.setXYZ(i * 2 + 1, pb.x, pb.y, pb.z);
+  });
+  pos.needsUpdate = true;
+}
+
+function actualizarEsqueleto(f) {
+  const [xs, ys] = f.pose;
+  if (xs.length !== 33) return;
+  const cx = (xs[11] + xs[12]) / 2;
+  const cy = (ys[11] + ys[12]) / 2;
+  const ancho = Math.hypot(xs[11] - xs[12], ys[11] - ys[12]) || 1;
+  const s = ESQ_ESCALA / ancho;
+  const transformar = (x, y, z) => new THREE.Vector3(
+    ESQ_X + (x - cx) * s,
+    ESQ_Y - (y - cy) * s,
+    -z * s * 0.5
+  );
+  actualizarEsq(esqPose, f.pose, transformar);
+  actualizarEsq(esqManoI, f.l_hand, transformar);
+  actualizarEsq(esqManoD, f.r_hand, transformar);
+}
+
+// ---------- retargeting (Kalidokit -> huesos VRM) ----------
+const _euler = new THREE.Euler();
+const _quat = new THREE.Quaternion();
+
+// Kalidokit usa nombres VRM0; el modelo es VRM1 (pulgar cambia)
+const NOMBRE_VRM1 = {
+  LeftThumbProximal: 'leftThumbMetacarpal',
+  LeftThumbIntermediate: 'leftThumbProximal',
+  LeftThumbDistal: 'leftThumbDistal',
+  RightThumbProximal: 'rightThumbMetacarpal',
+  RightThumbIntermediate: 'rightThumbProximal',
+  RightThumbDistal: 'rightThumbDistal',
+};
+function nombreHueso(k) {
+  return NOMBRE_VRM1[k] || (k.charAt(0).toLowerCase() + k.slice(1));
+}
+
+function rotarHueso(nombre, rot, amortiguar = 1, lerp = 0.45) {
+  if (!vrm || !rot) return;
+  const hueso = vrm.humanoid.getNormalizedBoneNode(nombreHueso(nombre));
+  if (!hueso) return;
+  _euler.set(rot.x * amortiguar, rot.y * amortiguar, rot.z * amortiguar, rot.rotationOrder || 'XYZ');
+  _quat.setFromEuler(_euler);
+  hueso.quaternion.slerp(_quat, lerp);
+}
+
+function aLandmarks(arr) {
+  const [xs, ys, zs] = arr;
+  const out = [];
+  for (let i = 0; i < xs.length; i++) out.push({ x: xs[i], y: ys[i], z: zs[i], visibility: 1 });
+  return out;
+}
+
+const DEDOS = ['Thumb', 'Index', 'Middle', 'Ring', 'Little'];
+const FALANGES = ['Proximal', 'Intermediate', 'Distal'];
+
+// ---------- retargeting directo: vectores landmark -> huesos ----------
+// espacio avatar: X = x imagen, Y = -y imagen, Z = -z imagen (avatar mira a camara)
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4();
+
+// Para landmarks normalizados a imagen (sin world): z es ruidoso, se amortigua.
+const Z_FACTOR = 0.75;
+function dirLm(arr, a, b) {
+  const [xs, ys, zs] = arr;
+  return new THREE.Vector3(xs[b] - xs[a], -(ys[b] - ys[a]), -(zs[b] - zs[a]) * Z_FACTOR).normalize();
+}
+// Para pose_world_landmarks (metros 3D reales): z es confiable, sin amortiguar.
+function dirLmWorld(arr, a, b) {
+  const [xs, ys, zs] = arr;
+  return new THREE.Vector3(xs[b] - xs[a], -(ys[b] - ys[a]), -(zs[b] - zs[a])).normalize();
+}
+
+let restDirs = null;
+function calcularRest() {
+  restDirs = {};
+  const cadenas = [
+    ['leftUpperArm', 'leftLowerArm'], ['leftLowerArm', 'leftHand'],
+    ['rightUpperArm', 'rightLowerArm'], ['rightLowerArm', 'rightHand'],
+    ['leftHand', 'leftMiddleProximal'], ['rightHand', 'rightMiddleProximal'],
+  ];
+  for (const [hueso, hijo] of cadenas) {
+    const nh = vrm.humanoid.getNormalizedBoneNode(hijo);
+    if (nh) restDirs[hueso] = nh.position.clone().normalize();
+  }
+}
+
+function apuntarHueso(nombre, targetDir, lerp = 0.55) {
+  const hueso = vrm.humanoid.getNormalizedBoneNode(nombre);
+  if (!hueso || !restDirs[nombre]) return;
+  hueso.parent.updateWorldMatrix(true, false);
+  hueso.parent.getWorldQuaternion(_q1);
+  const local = targetDir.clone().applyQuaternion(_q2.copy(_q1).invert());
+  _q3.setFromUnitVectors(restDirs[nombre], local);
+  hueso.quaternion.slerp(_q3, lerp);
+}
+
+function orientarMuneca(nombre, hand, lado, lerp = 0.55) {
+  const hueso = vrm.humanoid.getNormalizedBoneNode(nombre);
+  if (!hueso) return;
+  const dir = dirLm(hand, 0, 9);                 // muñeca -> nudillo medio
+  const vI = dirLm(hand, 0, 5);
+  const vP = dirLm(hand, 0, 17);
+  // Normal de la palma. Invertir SOLO para mano izquierda (orden de cross
+  // depende de la quiralidad de cada mano fisica).
+  let normal = new THREE.Vector3().crossVectors(vI, vP).normalize();
+  if (lado === 'left') normal.negate();
+  const t3 = new THREE.Vector3().crossVectors(dir, normal).normalize();
+  const n2 = new THREE.Vector3().crossVectors(t3, dir).normalize();
+  _m1.makeBasis(dir, n2, t3);
+  const rD = new THREE.Vector3(lado === 'left' ? 1 : -1, 0, 0); // reposo: mano a lo largo del brazo
+  const rN = new THREE.Vector3(0, -1, 0);                       // palma abajo en T-pose
+  const r3 = new THREE.Vector3().crossVectors(rD, rN);
+  _m2.makeBasis(rD, rN, r3);
+  _q3.setFromRotationMatrix(_m1.multiply(_m2.invert()));
+  hueso.parent.updateWorldMatrix(true, false);
+  hueso.parent.getWorldQuaternion(_q1);
+  const localQ = _q2.copy(_q1).invert().multiply(_q3);
+  hueso.quaternion.slerp(localQ, lerp);
+}
+
+// ---------- One Euro Filter ----------
+// Pasa-bajo adaptativo: cuando el punto se mueve rapido deja pasar mas;
+// cuando esta quieto suaviza fuerte. Reduce jitter sin meter retraso visible.
+class OneEuro {
+  constructor(mincutoff = 1.5, beta = 0.05, dcutoff = 1) {
+    this.mincutoff = mincutoff; this.beta = beta; this.dcutoff = dcutoff;
+    this.xPrev = null; this.dxPrev = 0; this.tPrev = 0;
+  }
+  _alpha(cutoff, te) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / te);
+  }
+  filter(x, t) {
+    if (this.xPrev === null) { this.xPrev = x; this.tPrev = t; return x; }
+    const te = Math.max(t - this.tPrev, 1e-3);
+    const dx = (x - this.xPrev) / te;
+    const aD = this._alpha(this.dcutoff, te);
+    const edx = aD * dx + (1 - aD) * this.dxPrev;
+    const cutoff = this.mincutoff + this.beta * Math.abs(edx);
+    const a = this._alpha(cutoff, te);
+    const hat = a * x + (1 - a) * this.xPrev;
+    this.xPrev = hat; this.dxPrev = edx; this.tPrev = t;
+    return hat;
+  }
+  reset() { this.xPrev = null; this.dxPrev = 0; }
+}
+
+// Solo filtramos los landmarks que el retargeting consume.
+// Pose: nariz + hombros/codos/munecas. Manos: las 21 (Kalidokit las usa).
+const POSE_FILTRAR = [0, 11, 12, 13, 14, 15, 16];
+
+let filtros = { pose: null, pose_world: null, l_hand: null, r_hand: null };
+function crearBanco(n) {
+  return Array.from({ length: n }, () => [new OneEuro(), new OneEuro(), new OneEuro()]);
+}
+function reiniciarSuavizado() {
+  if (!filtros.pose) {
+    filtros = { pose: crearBanco(33), pose_world: crearBanco(33),
+                l_hand: crearBanco(21), r_hand: crearBanco(21) };
+  } else {
+    for (const k of Object.keys(filtros)) {
+      for (const ejes of filtros[k]) for (const f of ejes) f.reset();
+    }
+  }
+  manoCache.l = null; manoCache.r = null;
+}
+
+// Buffers reutilizables: evita asignar 9 arrays + 225 pushes por frame (~13k allocs/s a 60fps).
+const _outPose = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
+const _outPoseW = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
+const _outLH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+const _outRH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+
+function filtrarSubset(arr, banco, out, t) {
+  if (arr[0].length !== 33) return arr;
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 33; i++) out[j][i] = arr[j][i];
+  for (const i of POSE_FILTRAR) {
+    out[0][i] = banco[i][0].filter(arr[0][i], t);
+    out[1][i] = banco[i][1].filter(arr[1][i], t);
+    out[2][i] = banco[i][2].filter(arr[2][i], t);
+  }
+  return out;
+}
+const filtrarPose = (arr, t) => filtrarSubset(arr, filtros.pose, _outPose, t);
+const filtrarPoseWorld = (arr, t) => filtrarSubset(arr, filtros.pose_world, _outPoseW, t);
+function filtrarMano(arr, banco, out, t) {
+  if (arr[0].length !== 21) return arr;
+  for (let i = 0; i < 21; i++) {
+    out[0][i] = banco[i][0].filter(arr[0][i], t);
+    out[1][i] = banco[i][1].filter(arr[1][i], t);
+    out[2][i] = banco[i][2].filter(arr[2][i], t);
+  }
+  return out;
+}
+
+// Continuidad: si MediaPipe pierde una mano un frame, no soltarla a reposo durante HOLD_MS.
+const HOLD_MS = 300;
+const manoCache = { l: null, r: null };
+function manoConContinuidad(lado, arr, t) {
+  if (arr[0].length === 21) {
+    manoCache[lado] = { arr, t };
+    return arr;
+  }
+  const c = manoCache[lado];
+  return (c && t - c.t < HOLD_MS) ? c.arr : arr;
+}
+
+// MediaPipe etiqueta manos asumiendo video espejo -> etiquetas no confiables.
+// Asignar cada mano a la muñeca del cuerpo (15 izq, 16 der) mas cercana.
+const MANO_VACIA = [[], [], []];
+function asignarManos(f) {
+  const [xs, ys] = f.pose;
+  const dist = (h, wi) => Math.hypot(h[0][0] - xs[wi], h[1][0] - ys[wi]);
+  const manos = [f.l_hand, f.r_hand].filter(h => h[0].length === 21);
+  if (manos.length === 0) return { l: MANO_VACIA, r: MANO_VACIA };
+  if (manos.length === 1) {
+    const h = manos[0];
+    return dist(h, 15) <= dist(h, 16) ? { l: h, r: MANO_VACIA } : { l: MANO_VACIA, r: h };
+  }
+  const [a, b] = manos;
+  return dist(a, 15) + dist(b, 16) <= dist(a, 16) + dist(b, 15)
+    ? { l: a, r: b } : { l: b, r: a };
+}
+
+const _restX = new THREE.Vector3(1, 0, 0);
+const _POSE_VACIA = [[], [], []];
+function aplicarFrame(fIn, t) {
+  const f = {
+    pose: filtrarPose(fIn.pose, t),
+    pose_world: fIn.pose_world ? filtrarPoseWorld(fIn.pose_world, t) : _POSE_VACIA,
+    l_hand: filtrarMano(manoConContinuidad('l', fIn.l_hand, t), filtros.l_hand, _outLH, t),
+    r_hand: filtrarMano(manoConContinuidad('r', fIn.r_hand, t), filtros.r_hand, _outRH, t),
+  };
+  actualizarEsqueleto(f);
+  if (!vrm) return;
+  if (f.pose[0].length !== 33) return;
+  if (!restDirs) calcularRest();
+
+  // limita una rotacion a un angulo maximo (evita movimientos bruscos)
+  function clampQuat(q, maxRad) {
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+    if (ang > maxRad) q.slerp(new THREE.Quaternion(), 1 - maxRad / ang);
+    return q;
+  }
+
+  // torso: linea de hombros solo en plano XY (z = ruido), maximo ~10°
+  const chest = vrm.humanoid.getNormalizedBoneNode('chest') || vrm.humanoid.getNormalizedBoneNode('spine');
+  if (chest) {
+    const [xs, ys] = f.pose;
+    const sh = new THREE.Vector3(xs[11] - xs[12], -(ys[11] - ys[12]), 0).normalize();
+    _q3.setFromUnitVectors(_restX, sh);
+    chest.quaternion.slerp(clampQuat(_q3, 0.17), 0.15);
+  }
+
+  // cabeza: centro de hombros -> nariz, sin profundidad, maximo ~20°
+  const neck = vrm.humanoid.getNormalizedBoneNode('neck') || vrm.humanoid.getNormalizedBoneNode('head');
+  if (neck) {
+    const [xs, ys] = f.pose;
+    const cx = (xs[11] + xs[12]) / 2, cy = (ys[11] + ys[12]) / 2;
+    const dirCabeza = new THREE.Vector3(xs[0] - cx, -(ys[0] - cy), 0).normalize();
+    _q3.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirCabeza);
+    neck.quaternion.slerp(clampQuat(_q3, 0.35), 0.2);
+  }
+
+  // brazos: usar pose_world (metros, z confiable) si esta disponible; si no, imagen 2.5D
+  const w = f.pose_world && f.pose_world[0].length === 33 ? f.pose_world : null;
+  const dirBrazo = (a, b) => w ? dirLmWorld(w, a, b) : dirLm(f.pose, a, b);
+  apuntarHueso('leftUpperArm',  dirBrazo(11, 13));
+  apuntarHueso('leftLowerArm',  dirBrazo(13, 15));
+  apuntarHueso('rightUpperArm', dirBrazo(12, 14));
+  apuntarHueso('rightLowerArm', dirBrazo(14, 16));
+
+  // manos: asignadas por cercania
+  const manos = asignarManos(f);
+  if (manos.l[0].length === 21) {
+    apuntarHueso('leftHand',  dirLm(manos.l, 0, 9));    // muñeca -> nudillo medio
+    const rig = Kalidokit.Hand.solve(aLandmarks(manos.l), 'Left');
+    if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Left' + d + ph, rig['Left' + d + ph]);
+  }
+  if (manos.r[0].length === 21) {
+    apuntarHueso('rightHand', dirLm(manos.r, 0, 9));
+    const rig = Kalidokit.Hand.solve(aLandmarks(manos.r), 'Right');
+    if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Right' + d + ph, rig['Right' + d + ph]);
+  }
+}
+
+function posturaReposo() {
+  if (!vrm) return;
+  for (const h of vrm.humanoid.humanBones ? Object.keys(vrm.humanoid.humanBones) : []) {
+    const n = vrm.humanoid.getNormalizedBoneNode(h);
+    if (n) n.quaternion.slerp(new THREE.Quaternion(), 0.08);
+  }
+}
+
+// ---------- traducción / cola ----------
+let cola = [];
+let actual = null;
+let frameTime = 0;
+const cacheSenas = {};
+let indice = {};
+
+function etiqueta(v) { return typeof v === 'string' ? v : v.label; }
+function fuente(v)   { return typeof v === 'object' && v.source ? v.source : 'LSCS45'; }
+let lookup = {};   // palabra normalizada -> nombre de archivo
+
+const COLORES_FUENTE = { LSCPROPIO: '#1976d2', LSCS45: '#f57c00', LSC50: '#7b1fa2' };
+
+(async () => {
+  indice = await (await fetch('signs/index.json')).json();
+  const claves = Object.keys(indice).sort((a, b) => etiqueta(indice[a]).localeCompare(etiqueta(indice[b])));
+
+  const grupos = {};
+  for (const k of claves) {
+    lookup[normalizar(k)] = k;
+    const src = fuente(indice[k]);
+    (grupos[src] = grupos[src] || []).push(k);
+  }
+
+  for (const src of Object.keys(grupos).sort()) {
+    const cont = document.createElement('div');
+    cont.className = 'grupo';
+    const titulo = document.createElement('h4');
+    titulo.innerHTML = `<span class="punto" style="background:${COLORES_FUENTE[src] || '#666'}"></span>${src} (${grupos[src].length})`;
+    cont.appendChild(titulo);
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    for (const k of grupos[src]) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = etiqueta(indice[k]) + ` <span class="badge src-${src}">${src}</span>`;
+      chip.onclick = async () => { cola.push(await cargarSena(k)); };
+      chips.appendChild(chip);
+    }
+    cont.appendChild(chips);
+    vocabDiv.appendChild(cont);
+  }
+})();
+
+async function cargarSena(n) {
+  if (!cacheSenas[n]) cacheSenas[n] = await (await fetch('signs/' + n + '.json')).json();
+  return cacheSenas[n];
+}
+
+function normalizar(p) {
+  return p.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+async function traducir() {
+  const palabras = document.getElementById('texto').value.split(/\s+/).filter(Boolean);
+  cola = []; actual = null;
+  const omitidas = [];
+  for (const p of palabras) {
+    const n = normalizar(p);
+    if (lookup[n]) cola.push(await cargarSena(lookup[n]));
+    else if (n) omitidas.push(p);
+  }
+  estado.innerHTML = omitidas.length
+    ? '<span class="omitida">Sin seña: ' + omitidas.join(', ') + '</span>' : '';
+}
+document.getElementById('traducir').onclick = traducir;
+document.getElementById('texto').addEventListener('keydown', e => { if (e.key === 'Enter') traducir(); });
+
+// interpolacion lineal entre frames para movimiento suave
+function interpolar(f1, f2, t) {
+  const out = {};
+  for (const k of ['pose', 'pose_world', 'l_hand', 'r_hand']) {
+    const a = f1[k], b = f2[k];
+    if (a && b && a[0] && b[0] && a[0].length && a[0].length === b[0].length) {
+      out[k] = [0, 1, 2].map(j => a[j].map((v, i) => v + (b[j][i] - v) * t));
+    } else {
+      out[k] = a || _POSE_VACIA;
+    }
+  }
+  return out;
+}
+
+// ---------- bucle ----------
+const reloj = new THREE.Clock();
+reiniciarSuavizado();   // crea el banco de filtros
+let tAcum = 0;
+function animar() {
+  requestAnimationFrame(animar);
+  const dt = reloj.getDelta();
+  tAcum += dt * 1000;
+
+  if (!actual && cola.length) {
+    actual = cola.shift();
+    frameTime = 0;
+    reiniciarSuavizado();
+    estado.innerHTML = 'Señando: <span class="actual">' + actual.sign + '</span>' +
+      (cola.length ? ' · siguientes: ' + cola.map(c => c.sign).join(', ') : '');
+    const vid = document.getElementById('video');
+    if (actual.video) {
+      vid.src = actual.video;
+      vid.style.display = 'block';
+      vid.currentTime = 0;
+      vid.play();
+    } else {
+      vid.style.display = 'none';
+      vid.pause();
+    }
+  }
+  if (actual) {
+    frameTime += dt * actual.fps;
+    const i = Math.floor(frameTime);
+    if (i >= actual.frames.length) {
+      actual = null;
+      if (!cola.length) estado.innerHTML += ' ✓';
+    } else if (i + 1 < actual.frames.length) {
+      aplicarFrame(interpolar(actual.frames[i], actual.frames[i + 1], frameTime - i), tAcum);
+    } else {
+      aplicarFrame(actual.frames[i], tAcum);
+    }
+  } else {
+    posturaReposo();
+  }
+
+  if (vrm) vrm.update(dt);
+  renderer.render(scene, camera);
+}
+animar();
+</script>
+</body>
+</html>

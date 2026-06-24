@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Traductor LSC</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; background: #0e0e14; color: #eee; min-height: 100vh; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: #14141ccc; backdrop-filter: blur(10px);
+    border-bottom: 1px solid #232330; padding: 16px 28px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+  header .sub { color: #888; font-size: 12px; margin-bottom: 14px; }
+  #buscar {
+    width: 100%; max-width: 480px; padding: 10px 14px; font-size: 14px;
+    background: #1e1e28; border: 1px solid #2a2a33; color: #eee;
+    border-radius: 8px; outline: none;
+  }
+  #buscar:focus { border-color: #2e7d32; }
+
+  #frases { padding: 14px 28px 0; }
+  #frases h3 { margin: 0 0 8px; font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: 0.8px; }
+  #frases .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  #frases .frase {
+    padding: 6px 12px; background: #1e3a1e; border: 1px solid #2e7d32;
+    color: #c8e6c9; border-radius: 14px; font-size: 13px; cursor: pointer;
+  }
+  #frases .frase:hover { background: #2e7d32; color: #fff; }
+
+  main { padding: 24px 28px 360px; }
+
+  .grupo { margin-bottom: 28px; }
+  .grupo h4 {
+    margin: 0 0 12px; font-size: 12px; color: #aaa;
+    text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .grupo h4 .punto { width: 10px; height: 10px; border-radius: 50%; }
+  .grupo h4 .conteo { color: #555; font-weight: normal; font-size: 11px; }
+
+  .palabras {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .palabra {
+    padding: 12px 14px; background: #1e1e28; border: 1px solid #2a2a33;
+    color: #ddd; border-radius: 8px; font-size: 14px; cursor: pointer;
+    transition: all 0.15s; user-select: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .palabra:hover { background: #2e7d32; border-color: #2e7d32; color: #fff; transform: translateY(-1px); }
+  .palabra.activa {
+    background: #1976d2; border-color: #1976d2; color: #fff;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.25);
+  }
+  .palabra .src {
+    font-size: 9px; padding: 2px 6px; border-radius: 6px;
+    background: rgba(255,255,255,0.1); opacity: 0.7; flex-shrink: 0;
+  }
+  .src-LSCPROPIO { color: #64b5f6; }
+  .src-LSCS45 { color: #ffb74d; }
+  .src-LSC50 { color: #ba68c8; }
+
+  /* --- Avatar flotante --- */
+  #avatarCard {
+    position: fixed; bottom: 20px; right: 20px;
+    width: 360px; height: 480px;
+    background: linear-gradient(180deg, #1a1a24 0%, #0e0e14 100%);
+    border: 1px solid #2a2a33; border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    overflow: hidden; z-index: 100;
+  }
+  #escena { width: 100%; height: 100%; }
+  canvas { display: block; }
+
+  #estado {
+    position: absolute; top: 14px; left: 14px; right: 14px;
+    background: #0e0e14cc; padding: 8px 14px; border-radius: 18px;
+    font-size: 13px; text-align: center;
+    border: 1px solid #2a2a33; backdrop-filter: blur(8px);
+  }
+  #estado.idle { opacity: 0.5; }
+  #estado .actual { color: #8bc34a; font-weight: 600; }
+
+  #video {
+    position: absolute; bottom: 12px; left: 12px;
+    width: 110px; border-radius: 8px; border: 1px solid #333;
+    background: #000; display: none;
+  }
+
+  #cola {
+    position: absolute; bottom: 12px; right: 12px;
+    font-size: 11px; color: #888; max-width: 200px; text-align: right;
+  }
+  #cola .item { display: inline-block; margin-left: 4px; padding: 2px 7px; background: #1e1e28; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Traductor LSC</h1>
+  <div class="sub">Lengua de Señas Colombiana · pasa el cursor sobre una palabra o haz clic</div>
+  <input id="buscar" type="text" placeholder="Buscar palabra…" autofocus>
+</header>
+
+<section id="frases">
+  <h3>Frases rápidas</h3>
+  <div class="chips" id="frasesChips"></div>
+</section>
+
+<main id="lista"></main>
+
+<div id="avatarCard">
+  <div id="escena"></div>
+  <div id="estado" class="idle">Cargando avatar…</div>
+  <video id="video" muted playsinline></video>
+  <div id="cola"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
+    "kalidokit": "https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/+esm"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import * as Kalidokit from 'kalidokit';
+
+const estado = document.getElementById('estado');
+const escena = document.getElementById('escena');
+const listaDiv = document.getElementById('lista');
+const colaDiv = document.getElementById('cola');
+const buscar = document.getElementById('buscar');
+
+// ---------- escena 3D ----------
+const scene = new THREE.Scene();
+scene.background = null;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+escena.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+camera.position.set(0, 1.35, 2.4);
+camera.lookAt(0, 1.2, 0);
+
+function ajustar() {
+  const r = escena.getBoundingClientRect();
+  renderer.setSize(r.width, r.height);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+}
+ajustar();
+addEventListener('resize', ajustar);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const luz = new THREE.DirectionalLight(0xffffff, 1.3);
+luz.position.set(1, 2.5, 2);
+scene.add(luz);
+const luz2 = new THREE.DirectionalLight(0x6cb4ff, 0.4);
+luz2.position.set(-2, 1, -1);
+scene.add(luz2);
+const piso = new THREE.Mesh(
+  new THREE.CircleGeometry(1.4, 48),
+  new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.9 })
+);
+piso.rotation.x = -Math.PI / 2;
+scene.add(piso);
+
+// ---------- avatar VRM ----------
+let vrm = null;
+const loader = new GLTFLoader();
+loader.register(p => new VRMLoaderPlugin(p));
+loader.load('avatars/8329890252317737768.vrm', gltf => {
+  vrm = gltf.userData.vrm;
+  VRMUtils.removeUnnecessaryJoints(gltf.scene);
+  if (vrm.meta?.metaVersion === '0') VRMUtils.rotateVRM0(vrm);
+  scene.add(vrm.scene);
+  setEstado('Listo', true);
+}, undefined, err => setEstado('Error: ' + err.message));
+
+// ---------- retargeting (core compartido con index.html) ----------
+const _euler = new THREE.Euler();
+const _quat = new THREE.Quaternion();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+const NOMBRE_VRM1 = {
+  LeftThumbProximal: 'leftThumbMetacarpal', LeftThumbIntermediate: 'leftThumbProximal', LeftThumbDistal: 'leftThumbDistal',
+  RightThumbProximal: 'rightThumbMetacarpal', RightThumbIntermediate: 'rightThumbProximal', RightThumbDistal: 'rightThumbDistal',
+};
+const nombreHueso = k => NOMBRE_VRM1[k] || (k.charAt(0).toLowerCase() + k.slice(1));
+
+function rotarHueso(nombre, rot, lerp = 0.45) {
+  if (!vrm || !rot) return;
+  const h = vrm.humanoid.getNormalizedBoneNode(nombreHueso(nombre));
+  if (!h) return;
+  _euler.set(rot.x, rot.y, rot.z, rot.rotationOrder || 'XYZ');
+  _quat.setFromEuler(_euler);
+  h.quaternion.slerp(_quat, lerp);
+}
+function aLandmarks(arr) {
+  const [xs, ys, zs] = arr;
+  const out = [];
+  for (let i = 0; i < xs.length; i++) out.push({ x: xs[i], y: ys[i], z: zs[i], visibility: 1 });
+  return out;
+}
+const DEDOS = ['Thumb', 'Index', 'Middle', 'Ring', 'Little'];
+const FALANGES = ['Proximal', 'Intermediate', 'Distal'];
+const Z_FACTOR = 0.75;
+const dirLm = (a, i, j) => new THREE.Vector3(a[0][j]-a[0][i], -(a[1][j]-a[1][i]), -(a[2][j]-a[2][i])*Z_FACTOR).normalize();
+const dirLmWorld = (a, i, j) => new THREE.Vector3(a[0][j]-a[0][i], -(a[1][j]-a[1][i]), -(a[2][j]-a[2][i])).normalize();
+
+let restDirs = null;
+function calcularRest() {
+  restDirs = {};
+  const pares = [
+    ['leftUpperArm', 'leftLowerArm'], ['leftLowerArm', 'leftHand'],
+    ['rightUpperArm', 'rightLowerArm'], ['rightLowerArm', 'rightHand'],
+    ['leftHand', 'leftMiddleProximal'], ['rightHand', 'rightMiddleProximal'],
+  ];
+  for (const [h, hijo] of pares) {
+    const n = vrm.humanoid.getNormalizedBoneNode(hijo);
+    if (n) restDirs[h] = n.position.clone().normalize();
+  }
+}
+function apuntarHueso(nombre, dir, lerp = 0.55) {
+  const h = vrm.humanoid.getNormalizedBoneNode(nombre);
+  if (!h || !restDirs[nombre]) return;
+  h.parent.updateWorldMatrix(true, false);
+  h.parent.getWorldQuaternion(_q1);
+  const local = dir.clone().applyQuaternion(_q2.copy(_q1).invert());
+  _q3.setFromUnitVectors(restDirs[nombre], local);
+  h.quaternion.slerp(_q3, lerp);
+}
+
+class OneEuro {
+  constructor(mincutoff = 1.5, beta = 0.05, dcutoff = 1) {
+    this.mincutoff = mincutoff; this.beta = beta; this.dcutoff = dcutoff;
+    this.xPrev = null; this.dxPrev = 0; this.tPrev = 0;
+  }
+  _alpha(c, te) { return 1 / (1 + (1 / (2 * Math.PI * c)) / te); }
+  filter(x, t) {
+    if (this.xPrev === null) { this.xPrev = x; this.tPrev = t; return x; }
+    const te = Math.max(t - this.tPrev, 1e-3);
+    const dx = (x - this.xPrev) / te;
+    const aD = this._alpha(this.dcutoff, te);
+    const edx = aD * dx + (1 - aD) * this.dxPrev;
+    const a = this._alpha(this.mincutoff + this.beta * Math.abs(edx), te);
+    const hat = a * x + (1 - a) * this.xPrev;
+    this.xPrev = hat; this.dxPrev = edx; this.tPrev = t;
+    return hat;
+  }
+  reset() { this.xPrev = null; this.dxPrev = 0; }
+}
+
+const POSE_FILTRAR = [0, 11, 12, 13, 14, 15, 16];
+const crearBanco = n => Array.from({ length: n }, () => [new OneEuro(), new OneEuro(), new OneEuro()]);
+let filtros = { pose: crearBanco(33), pose_world: crearBanco(33), l_hand: crearBanco(21), r_hand: crearBanco(21) };
+function reiniciarSuavizado() {
+  for (const k of Object.keys(filtros)) for (const e of filtros[k]) for (const f of e) f.reset();
+  manoCache.l = null; manoCache.r = null;
+}
+const _outPose = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
+const _outPoseW = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
+const _outLH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+const _outRH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+
+function filtrarSubset(arr, banco, out, t) {
+  if (arr[0].length !== 33) return arr;
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 33; i++) out[j][i] = arr[j][i];
+  for (const i of POSE_FILTRAR) {
+    out[0][i] = banco[i][0].filter(arr[0][i], t);
+    out[1][i] = banco[i][1].filter(arr[1][i], t);
+    out[2][i] = banco[i][2].filter(arr[2][i], t);
+  }
+  return out;
+}
+function filtrarMano(arr, banco, out, t) {
+  if (arr[0].length !== 21) return arr;
+  for (let i = 0; i < 21; i++) {
+    out[0][i] = banco[i][0].filter(arr[0][i], t);
+    out[1][i] = banco[i][1].filter(arr[1][i], t);
+    out[2][i] = banco[i][2].filter(arr[2][i], t);
+  }
+  return out;
+}
+const HOLD_MS = 300;
+const manoCache = { l: null, r: null };
+function manoConContinuidad(lado, arr, t) {
+  if (arr[0].length === 21) { manoCache[lado] = { arr, t }; return arr; }
+  const c = manoCache[lado];
+  return (c && t - c.t < HOLD_MS) ? c.arr : arr;
+}
+const MANO_VACIA = [[], [], []];
+function asignarManos(f) {
+  const [xs, ys] = f.pose;
+  const dist = (h, wi) => Math.hypot(h[0][0] - xs[wi], h[1][0] - ys[wi]);
+  const manos = [f.l_hand, f.r_hand].filter(h => h[0].length === 21);
+  if (manos.length === 0) return { l: MANO_VACIA, r: MANO_VACIA };
+  if (manos.length === 1) {
+    const h = manos[0];
+    return dist(h, 15) <= dist(h, 16) ? { l: h, r: MANO_VACIA } : { l: MANO_VACIA, r: h };
+  }
+  const [a, b] = manos;
+  return dist(a, 15) + dist(b, 16) <= dist(a, 16) + dist(b, 15) ? { l: a, r: b } : { l: b, r: a };
+}
+
+const _restX = new THREE.Vector3(1, 0, 0);
+const _POSE_VACIA = [[], [], []];
+function clampQuat(q, maxRad) {
+  const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+  if (ang > maxRad) q.slerp(new THREE.Quaternion(), 1 - maxRad / ang);
+  return q;
+}
+function aplicarFrame(fIn, t) {
+  const f = {
+    pose: filtrarSubset(fIn.pose, filtros.pose, _outPose, t),
+    pose_world: fIn.pose_world ? filtrarSubset(fIn.pose_world, filtros.pose_world, _outPoseW, t) : _POSE_VACIA,
+    l_hand: filtrarMano(manoConContinuidad('l', fIn.l_hand, t), filtros.l_hand, _outLH, t),
+    r_hand: filtrarMano(manoConContinuidad('r', fIn.r_hand, t), filtros.r_hand, _outRH, t),
+  };
+  if (!vrm || f.pose[0].length !== 33) return;
+  if (!restDirs) calcularRest();
+
+  const chest = vrm.humanoid.getNormalizedBoneNode('chest') || vrm.humanoid.getNormalizedBoneNode('spine');
+  if (chest) {
+    const [xs, ys] = f.pose;
+    const sh = new THREE.Vector3(xs[11] - xs[12], -(ys[11] - ys[12]), 0).normalize();
+    _q3.setFromUnitVectors(_restX, sh);
+    chest.quaternion.slerp(clampQuat(_q3, 0.17), 0.15);
+  }
+  const neck = vrm.humanoid.getNormalizedBoneNode('neck') || vrm.humanoid.getNormalizedBoneNode('head');
+  if (neck) {
+    const [xs, ys] = f.pose;
+    const cx = (xs[11] + xs[12]) / 2, cy = (ys[11] + ys[12]) / 2;
+    const d = new THREE.Vector3(xs[0] - cx, -(ys[0] - cy), 0).normalize();
+    _q3.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+    neck.quaternion.slerp(clampQuat(_q3, 0.35), 0.2);
+  }
+
+  const w = f.pose_world && f.pose_world[0].length === 33 ? f.pose_world : null;
+  const dirBrazo = (a, b) => w ? dirLmWorld(w, a, b) : dirLm(f.pose, a, b);
+  apuntarHueso('leftUpperArm',  dirBrazo(11, 13));
+  apuntarHueso('leftLowerArm',  dirBrazo(13, 15));
+  apuntarHueso('rightUpperArm', dirBrazo(12, 14));
+  apuntarHueso('rightLowerArm', dirBrazo(14, 16));
+
+  const manos = asignarManos(f);
+  if (manos.l[0].length === 21) {
+    apuntarHueso('leftHand', dirLm(manos.l, 0, 9));
+    const rig = Kalidokit.Hand.solve(aLandmarks(manos.l), 'Left');
+    if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Left' + d + ph, rig['Left' + d + ph]);
+  }
+  if (manos.r[0].length === 21) {
+    apuntarHueso('rightHand', dirLm(manos.r, 0, 9));
+    const rig = Kalidokit.Hand.solve(aLandmarks(manos.r), 'Right');
+    if (rig) for (const d of DEDOS) for (const ph of FALANGES) rotarHueso('Right' + d + ph, rig['Right' + d + ph]);
+  }
+}
+
+function posturaReposo() {
+  if (!vrm) return;
+  for (const h of Object.keys(vrm.humanoid.humanBones || {})) {
+    const n = vrm.humanoid.getNormalizedBoneNode(h);
+    if (n) n.quaternion.slerp(new THREE.Quaternion(), 0.08);
+  }
+}
+
+// ---------- UI ----------
+const COLORES = { LSCPROPIO: '#1976d2', LSCS45: '#f57c00', LSC50: '#7b1fa2' };
+const FRASES_PRESET = [
+  'hola buenosdias', 'gracias', 'mi nombre',
+  'comoestas bien', 'lunes martes miercoles',
+  'enero febrero marzo', 'computador internet',
+  'telefono celular', 'porfavor ayudar',
+];
+
+let indice = {};
+let lookup = {};
+const cache = {};
+const cola = [];
+let actualSign = null;
+let frameTime = 0;
+
+const etiqueta = v => typeof v === 'string' ? v : v.label;
+const fuente   = v => (typeof v === 'object' && v.source) || 'LSCS45';
+const normalizar = p => p.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+
+function setEstado(html, idle = false) {
+  estado.innerHTML = html;
+  estado.classList.toggle('idle', idle);
+}
+
+async function cargarSena(clave) {
+  if (!cache[clave]) cache[clave] = await (await fetch('signs/' + clave + '.json')).json();
+  return cache[clave];
+}
+
+async function encolar(claves) {
+  if (typeof claves === 'string') claves = [claves];
+  for (const c of claves) {
+    const s = await cargarSena(c);
+    if (s) cola.push(s);
+  }
+  actualizarCola();
+}
+function reemplazar(claves) {
+  cola.length = 0; actualSign = null;
+  encolar(claves);
+}
+function actualizarCola() {
+  colaDiv.innerHTML = cola.length
+    ? cola.map(s => `<span class="item">${s.sign}</span>`).join('')
+    : '';
+}
+
+let hoverTimer = null;
+const hoverEncolar = clave => {
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => encolar(clave), 280);
+};
+const cancelHover = () => clearTimeout(hoverTimer);
+
+function crearPalabra(clave, label, src) {
+  const el = document.createElement('div');
+  el.className = 'palabra';
+  el.dataset.clave = clave;
+  el.dataset.label = label.toLowerCase();
+  el.innerHTML = `<span>${label}</span><span class="src src-${src}">${src.replace('LSC','')}</span>`;
+  el.addEventListener('mouseenter', () => hoverEncolar(clave));
+  el.addEventListener('mouseleave', cancelHover);
+  el.addEventListener('click', () => { cancelHover(); reemplazar([clave]); });
+  return el;
+}
+
+function crearFrase(texto) {
+  const el = document.createElement('span');
+  el.className = 'frase';
+  el.textContent = texto;
+  el.addEventListener('click', () => {
+    const claves = texto.split(/\s+/).map(p => lookup[normalizar(p)]).filter(Boolean);
+    if (claves.length) reemplazar(claves);
+  });
+  return el;
+}
+
+function renderVocab(filtro = '') {
+  listaDiv.innerHTML = '';
+  const claves = Object.keys(indice)
+    .filter(k => !filtro || etiqueta(indice[k]).toLowerCase().includes(filtro))
+    .sort((a, b) => etiqueta(indice[a]).localeCompare(etiqueta(indice[b])));
+
+  const grupos = {};
+  for (const k of claves) {
+    const src = fuente(indice[k]);
+    (grupos[src] = grupos[src] || []).push(k);
+  }
+  for (const src of Object.keys(grupos).sort()) {
+    const g = document.createElement('section'); g.className = 'grupo';
+    g.innerHTML = `<h4><span class="punto" style="background:${COLORES[src]}"></span>${src}<span class="conteo">${grupos[src].length} palabras</span></h4>`;
+    const chips = document.createElement('div'); chips.className = 'palabras';
+    for (const k of grupos[src]) chips.appendChild(crearPalabra(k, etiqueta(indice[k]), src));
+    g.appendChild(chips);
+    listaDiv.appendChild(g);
+  }
+  if (!claves.length) listaDiv.innerHTML = '<p style="color:#666;text-align:center;padding:40px">Sin coincidencias</p>';
+}
+
+(async () => {
+  indice = await (await fetch('signs/index.json')).json();
+  for (const k of Object.keys(indice)) lookup[normalizar(k)] = k;
+
+  const frasesDiv = document.getElementById('frasesChips');
+  for (const f of FRASES_PRESET) {
+    const claves = f.split(/\s+/).map(p => lookup[normalizar(p)]).filter(Boolean);
+    if (claves.length === f.split(/\s+/).length) frasesDiv.appendChild(crearFrase(f));
+  }
+  renderVocab();
+})();
+
+buscar.addEventListener('input', e => renderVocab(e.target.value.toLowerCase()));
+
+// ---------- bucle ----------
+const reloj = new THREE.Clock();
+let tAcum = 0;
+function animar() {
+  requestAnimationFrame(animar);
+  const dt = reloj.getDelta();
+  tAcum += dt * 1000;
+
+  if (!actualSign && cola.length) {
+    actualSign = cola.shift();
+    frameTime = 0;
+    reiniciarSuavizado();
+    actualizarCola();
+    setEstado(`<span class="actual">${actualSign.sign}</span>`);
+    const v = document.getElementById('video');
+    if (actualSign.video) {
+      v.src = actualSign.video; v.style.display = 'block'; v.currentTime = 0; v.play();
+    } else { v.style.display = 'none'; v.pause(); }
+
+    listaDiv.querySelectorAll('.palabra.activa').forEach(el => el.classList.remove('activa'));
+    const lab = normalizar(actualSign.sign);
+    listaDiv.querySelectorAll('.palabra').forEach(el => {
+      if (normalizar(el.dataset.label) === lab) el.classList.add('activa');
+    });
+  }
+
+  if (actualSign) {
+    frameTime += dt * actualSign.fps;
+    const i = Math.floor(frameTime);
+    if (i >= actualSign.frames.length) {
+      actualSign = null;
+      listaDiv.querySelectorAll('.palabra.activa').forEach(el => el.classList.remove('activa'));
+      if (!cola.length) setEstado('Listo', true);
+    } else {
+      aplicarFrame(actualSign.frames[i], tAcum);
+    }
+  } else {
+    posturaReposo();
+  }
+
+  if (vrm) vrm.update(dt);
+  renderer.render(scene, camera);
+}
+animar();
+</script>
+</body>
+</html>
