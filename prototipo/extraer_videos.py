@@ -18,6 +18,23 @@ PoseLandmarker = mp.tasks.vision.PoseLandmarker
 PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
 HandLandmarker = mp.tasks.vision.HandLandmarker
 HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
+FaceLandmarker = mp.tasks.vision.FaceLandmarker
+FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
+
+# Solo guardamos los puntos faciales necesarios para expresion
+# (468 puntos pesa demasiado; con estos basta para cejas, ojos, boca).
+FACE_INDICES = [
+    # cejas
+    70, 63, 105, 66, 107,        # ceja izquierda (sujeto)
+    336, 296, 334, 293, 300,     # ceja derecha
+    # ojos (apertura)
+    159, 145, 33, 133,           # ojo izquierdo: arriba, abajo, externo, interno
+    386, 374, 263, 362,          # ojo derecho
+    # boca (apertura y sonrisa)
+    13, 14, 78, 308,             # labios arriba/abajo, comisuras
+    17, 0,                       # mentón medio, encima labio superior
+    61, 291,                     # comisura izq/der mas externas
+]
 
 
 def slug(name):
@@ -41,7 +58,7 @@ def listar_videos():
     return vids
 
 
-def extraer(video_path, pose_lm, hand_lm):
+def extraer(video_path, pose_lm, hand_lm, face_lm):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     frames = []
@@ -54,6 +71,7 @@ def extraer(video_path, pose_lm, hand_lm):
                        data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         pose_res = pose_lm.detect_for_video(img, ts)
         hand_res = hand_lm.detect_for_video(img, ts)
+        face_res = face_lm.detect_for_video(img, ts)
 
         pose = [[], [], []]
         pose_world = [[], [], []]
@@ -71,8 +89,15 @@ def extraer(video_path, pose_lm, hand_lm):
             for lm in hand_res.hand_landmarks[i]:
                 destino[0].append(lm.x); destino[1].append(lm.y); destino[2].append(lm.z)
 
+        face = [[], [], []]
+        if face_res.face_landmarks:
+            lms = face_res.face_landmarks[0]
+            for idx in FACE_INDICES:
+                lm = lms[idx]
+                face[0].append(lm.x); face[1].append(lm.y); face[2].append(lm.z)
+
         frames.append({"pose": pose, "pose_world": pose_world,
-                       "l_hand": l_hand, "r_hand": r_hand})
+                       "l_hand": l_hand, "r_hand": r_hand, "face": face})
         ts += int(1000 / fps)
     cap.release()
     return fps, frames
@@ -94,14 +119,18 @@ def main():
     hand_opts = HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=os.path.join(MODELS, "hand_landmarker.task")),
         running_mode=RunningMode.VIDEO, num_hands=2)
+    face_opts = FaceLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=os.path.join(MODELS, "face_landmarker.task")),
+        running_mode=RunningMode.VIDEO)
 
     vids = listar_videos()
     print(f"{len(vids)} palabras con video")
     for palabra, ruta in vids.items():
         nombre = slug(palabra)
         with PoseLandmarker.create_from_options(pose_opts) as pose_lm, \
-             HandLandmarker.create_from_options(hand_opts) as hand_lm:
-            fps, frames = extraer(ruta, pose_lm, hand_lm)
+             HandLandmarker.create_from_options(hand_opts) as hand_lm, \
+             FaceLandmarker.create_from_options(face_opts) as face_lm:
+            fps, frames = extraer(ruta, pose_lm, hand_lm, face_lm)
         ext = os.path.splitext(ruta)[1].lower()
         vid_dest = nombre + (".mp4" if ext == ".mp4" else ".m4v")
         out_vid_path = os.path.join(OUT_VID, vid_dest)

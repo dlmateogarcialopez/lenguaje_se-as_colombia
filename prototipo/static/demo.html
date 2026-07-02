@@ -72,6 +72,7 @@
     border: 1px solid #2a2a33; border-radius: 14px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.6);
     overflow: hidden; z-index: 100;
+    transition: width 0.25s, height 0.25s, top 0.25s, left 0.25s, right 0.25s, bottom 0.25s;
   }
   #escena { width: 100%; height: 100%; }
   canvas { display: block; }
@@ -89,6 +90,7 @@
     position: absolute; bottom: 12px; left: 12px;
     width: 110px; border-radius: 8px; border: 1px solid #333;
     background: #000; display: none;
+    transition: width 0.25s, height 0.25s;
   }
 
   #cola {
@@ -96,6 +98,34 @@
     font-size: 11px; color: #888; max-width: 200px; text-align: right;
   }
   #cola .item { display: inline-block; margin-left: 4px; padding: 2px 7px; background: #1e1e28; border-radius: 8px; }
+
+  /* --- Botones de control del card --- */
+  #ctrl {
+    position: absolute; top: 14px; right: 14px; z-index: 5;
+    display: flex; gap: 6px;
+  }
+  .btnCtrl {
+    width: 30px; height: 30px; border-radius: 50%; border: 0;
+    background: #1e1e28cc; color: #ddd; cursor: pointer; font-size: 14px;
+    border: 1px solid #2a2a33; backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btnCtrl:hover { background: #2e7d32; color: #fff; }
+
+  /* --- Modo comparacion: avatar + video grandes lado a lado --- */
+  body.comparando #avatarCard {
+    bottom: auto; right: auto;
+    top: 0; left: 0; width: 50vw; height: 100vh;
+    border-radius: 0;
+  }
+  body.comparando #video {
+    position: fixed; top: 0; left: 50vw; bottom: 0; right: 0;
+    width: 50vw; height: 100vh; border-radius: 0; border: none;
+    display: block !important; background: #000;
+    z-index: 99;
+  }
+  body.comparando header, body.comparando #frases, body.comparando main { display: none; }
+  body.comparando #cola { display: none; }
 </style>
 </head>
 <body>
@@ -114,6 +144,11 @@
 <main id="lista"></main>
 
 <div id="avatarCard">
+  <div id="ctrl">
+    <button class="btnCtrl" id="btnRepetir" title="Repetir ultima seña">↻</button>
+    <button class="btnCtrl" id="btnComparar" title="Comparar lado a lado">⇔</button>
+    <button class="btnCtrl" id="btnSalir" title="Volver" style="display:none">×</button>
+  </div>
   <div id="escena"></div>
   <div id="estado" class="idle">Cargando avatar…</div>
   <video id="video" muted playsinline></video>
@@ -184,6 +219,9 @@ loader.load('avatars/8329890252317737768.vrm', gltf => {
   VRMUtils.removeUnnecessaryJoints(gltf.scene);
   if (vrm.meta?.metaVersion === '0') VRMUtils.rotateVRM0(vrm);
   scene.add(vrm.scene);
+  const em = vrm.expressionManager;
+  if (em) for (const e of em.expressions) expDisponibles.add(e.expressionName);
+  console.log('[VRM] blendshapes disponibles:', [...expDisponibles].join(', '));
   setEstado('Listo', true);
 }, undefined, err => setEstado('Error: ' + err.message));
 
@@ -218,6 +256,7 @@ const dirLm = (a, i, j) => new THREE.Vector3(a[0][j]-a[0][i], -(a[1][j]-a[1][i])
 const dirLmWorld = (a, i, j) => new THREE.Vector3(a[0][j]-a[0][i], -(a[1][j]-a[1][i]), -(a[2][j]-a[2][i])).normalize();
 
 let restDirs = null;
+let restHandWorld = null;   // base ortonormal en mundo del hueso de mano en T-pose
 function calcularRest() {
   restDirs = {};
   const pares = [
@@ -229,6 +268,16 @@ function calcularRest() {
     const n = vrm.humanoid.getNormalizedBoneNode(hijo);
     if (n) restDirs[h] = n.position.clone().normalize();
   }
+  // Capturar quaternion mundo del hueso de mano en T-pose
+  // (sirve para retargeting completo de muñeca con roll)
+  restHandWorld = {};
+  for (const lado of ['left', 'right']) {
+    const h = vrm.humanoid.getNormalizedBoneNode(lado + 'Hand');
+    if (h) {
+      h.updateWorldMatrix(true, false);
+      restHandWorld[lado] = h.getWorldQuaternion(new THREE.Quaternion());
+    }
+  }
 }
 function apuntarHueso(nombre, dir, lerp = 0.55) {
   const h = vrm.humanoid.getNormalizedBoneNode(nombre);
@@ -238,6 +287,42 @@ function apuntarHueso(nombre, dir, lerp = 0.55) {
   const local = dir.clone().applyQuaternion(_q2.copy(_q1).invert());
   _q3.setFromUnitVectors(restDirs[nombre], local);
   h.quaternion.slerp(_q3, lerp);
+}
+
+// Orientacion completa de muñeca (incluye roll de palma).
+// Construye base ortonormal en mundo desde landmarks de mano y la convierte
+// al espacio local del padre, respetando la orientacion de reposo del hueso.
+const _basisM = new THREE.Matrix4();
+const _xT = new THREE.Vector3(), _yT = new THREE.Vector3(), _zT = new THREE.Vector3();
+function orientarMuneca(nombre, hand, lado, lerp = 0.55) {
+  const h = vrm.humanoid.getNormalizedBoneNode(nombre);
+  if (!h || !restHandWorld[lado]) return;
+
+  // Eje X target = direccion de los dedos (muñeca -> nudillo medio)
+  _xT.set(hand[0][9] - hand[0][0], -(hand[1][9] - hand[1][0]), -(hand[2][9] - hand[2][0]) * Z_FACTOR).normalize();
+
+  // Normal de la palma usando nudillos del indice (5) y meñique (17).
+  // El cross product cambia de sentido segun quiralidad de cada mano fisica.
+  const v5x = hand[0][5] - hand[0][0], v5y = -(hand[1][5] - hand[1][0]), v5z = -(hand[2][5] - hand[2][0]) * Z_FACTOR;
+  const v17x = hand[0][17] - hand[0][0], v17y = -(hand[1][17] - hand[1][0]), v17z = -(hand[2][17] - hand[2][0]) * Z_FACTOR;
+  _yT.set(v5y * v17z - v5z * v17y, v5z * v17x - v5x * v17z, v5x * v17y - v5y * v17x).normalize();
+  if (lado === 'right') _yT.negate();
+
+  // Re-ortogonalizar y completar base ortonormal derecha
+  _zT.crossVectors(_xT, _yT).normalize();
+  _yT.crossVectors(_zT, _xT).normalize();
+
+  // Quaternion mundo target: rotacion que orienta la base canonica a (xT, yT, zT)
+  // Como en T-pose el hueso de mano tiene restHandWorld[lado], necesitamos:
+  // newLocal = parent⁻¹ × (target × rest⁻¹) × rest = parent⁻¹ × target (simplificacion)
+  // Eso es: el quaternion mundo del hueso pasa a ser exactamente target.
+  _basisM.makeBasis(_xT, _yT, _zT);
+  _q3.setFromRotationMatrix(_basisM);
+
+  h.parent.updateWorldMatrix(true, false);
+  h.parent.getWorldQuaternion(_q1);
+  const localQ = _q2.copy(_q1).invert().multiply(_q3);
+  h.quaternion.slerp(localQ, lerp);
 }
 
 class OneEuro {
@@ -262,15 +347,21 @@ class OneEuro {
 
 const POSE_FILTRAR = [0, 11, 12, 13, 14, 15, 16];
 const crearBanco = n => Array.from({ length: n }, () => [new OneEuro(), new OneEuro(), new OneEuro()]);
-let filtros = { pose: crearBanco(33), pose_world: crearBanco(33), l_hand: crearBanco(21), r_hand: crearBanco(21) };
+let filtros = {
+  pose: crearBanco(33), pose_world: crearBanco(33),
+  l_hand: crearBanco(21), r_hand: crearBanco(21),
+  face: crearBanco(26),
+};
 function reiniciarSuavizado() {
   for (const k of Object.keys(filtros)) for (const e of filtros[k]) for (const f of e) f.reset();
   manoCache.l = null; manoCache.r = null;
+  resetCara();
 }
 const _outPose = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
 const _outPoseW = [new Float32Array(33), new Float32Array(33), new Float32Array(33)];
 const _outLH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
 const _outRH = [new Float32Array(21), new Float32Array(21), new Float32Array(21)];
+const _outFace = [new Float32Array(26), new Float32Array(26), new Float32Array(26)];
 
 function filtrarSubset(arr, banco, out, t) {
   if (arr[0].length !== 33) return arr;
@@ -298,6 +389,96 @@ function manoConContinuidad(lado, arr, t) {
   const c = manoCache[lado];
   return (c && t - c.t < HOLD_MS) ? c.arr : arr;
 }
+// ---------- gestos faciales (medicion directa, no emociones inferidas) ----------
+// Indices del face (26 puntos):
+// 0-4 ceja izq | 5-9 ceja der | 10 parpado+ izq | 11 parpado- izq | 12 ext izq | 13 int izq
+// 14 parpado+ der | 15 parpado- der | 16 ext der | 17 int der
+// 18 labio sup centro | 19 labio inf centro | 20 comisura izq | 21 comisura der
+// 22 menton | 23 top labio sup | 24 comisura izq ext | 25 comisura der ext
+//
+// Estrategia: medir geometria del rostro y mapear a blendshapes del VRM como
+// proporcion del cambio respecto al NEUTRO (calibrado por seña, primer frame
+// con cara valida). No se interpretan emociones; se traduce movimiento muscular.
+const EXP_LERP = 0.35;
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const dist2D = (xs, ys, a, b) => Math.hypot(xs[b] - xs[a], ys[b] - ys[a]);
+
+function medirCara(face) {
+  const xs = face[0], ys = face[1];
+  const ref = dist2D(xs, ys, 12, 16) || 0.001;   // distancia interocular
+  return {
+    apOjoI: dist2D(xs, ys, 10, 11) / ref,                                // apertura ojo izq
+    apOjoD: dist2D(xs, ys, 14, 15) / ref,                                // apertura ojo der
+    apBoca: dist2D(xs, ys, 18, 19) / ref,                                // apertura boca
+    anchoBoca: dist2D(xs, ys, 20, 21) / ref,                             // ancho boca (sonrisa estira)
+    altCejaI: (ys[12] - (ys[0]+ys[1]+ys[2]+ys[3]+ys[4]) / 5) / ref,      // ceja izq respecto a ojo
+    altCejaD: (ys[16] - (ys[5]+ys[6]+ys[7]+ys[8]+ys[9]) / 5) / ref,      // ceja der
+    elevCom: (ys[18] - (ys[24] + ys[25]) / 2) / ref,                     // comisuras vs centro labio
+    desplCom: (ys[18] - (ys[24] + ys[25]) / 2) / ref,                    // mismo (para deteccion)
+  };
+}
+
+// Blendshapes del VRM disponibles (se llena al cargar avatar).
+const expDisponibles = new Set();
+let neutro = null;
+const expVal = {};   // valor suavizado actual por blendshape
+
+function resetCara() {
+  neutro = null;
+  for (const k of Object.keys(expVal)) {
+    expVal[k] = 0;
+    if (vrm?.expressionManager?.getExpression(k)) vrm.expressionManager.setValue(k, 0);
+  }
+}
+
+function setExp(k, val) {
+  if (!expDisponibles.has(k)) return;
+  val = clamp01(val);
+  expVal[k] = (expVal[k] ?? 0) + (val - (expVal[k] ?? 0)) * EXP_LERP;
+  vrm.expressionManager.setValue(k, expVal[k]);
+}
+
+function aplicarExpresion(face) {
+  if (!vrm || !vrm.expressionManager || !face || face[0].length !== 26) return;
+  const m = medirCara(face);
+  if (!neutro) { neutro = m; return; }   // calibrar primer frame valido como neutro
+
+  // Cierre de parpados: cuanto se cerraron respecto al neutro (0=igual, 1=cerrados)
+  const cierreI = clamp01(1 - m.apOjoI / Math.max(neutro.apOjoI, 0.001));
+  const cierreD = clamp01(1 - m.apOjoD / Math.max(neutro.apOjoD, 0.001));
+  setExp('blink', (cierreI + cierreD) / 2);
+  setExp('blinkLeft', cierreI);
+  setExp('blinkRight', cierreD);
+
+  // Apertura de boca: cuanto se abrio respecto al neutro
+  const aperturaDelta = (m.apBoca - neutro.apBoca) * 4;
+  setExp('aa', aperturaDelta);
+
+  // Sonrisa: medicion muscular real, sin "emocion".
+  // 1) ancho de boca aumentado respecto a neutro
+  // 2) comisuras elevadas respecto a centro del labio
+  const dAncho = (m.anchoBoca - neutro.anchoBoca) / Math.max(neutro.anchoBoca, 0.001);
+  const dElev  = m.elevCom - neutro.elevCom;
+  // Combinacion empirica: estiramiento horizontal + subida comisuras
+  const sonrisa = Math.max(0, dAncho * 1.8 + dElev * 8);
+  // Blendshape estandar VRM1 (minusculas) y VRM0 (capitalizado)
+  setExp('happy', sonrisa);
+  setExp('Happy', sonrisa);
+  setExp('Joy', sonrisa);
+
+  // Comisuras hacia abajo (no-sonrisa) -> blendshape sad si existe
+  const tristeza = Math.max(0, -dElev * 8);
+  setExp('sad', tristeza);
+  setExp('Sad', tristeza);
+
+  // Cejas arriba (subida real respecto a neutro)
+  const subI = (m.altCejaI - neutro.altCejaI) * 6;
+  const subD = (m.altCejaD - neutro.altCejaD) * 6;
+  const cejasArriba = Math.max(0, (subI + subD) / 2);
+  setExp('Surprised', cejasArriba);
+  setExp('surprised', cejasArriba);
+}
+
 const MANO_VACIA = [[], [], []];
 function asignarManos(f) {
   const [xs, ys] = f.pose;
@@ -319,15 +500,26 @@ function clampQuat(q, maxRad) {
   if (ang > maxRad) q.slerp(new THREE.Quaternion(), 1 - maxRad / ang);
   return q;
 }
+function filtrarFace(arr, t) {
+  if (arr[0].length !== 26) return arr;
+  for (let i = 0; i < 26; i++) {
+    _outFace[0][i] = filtros.face[i][0].filter(arr[0][i], t);
+    _outFace[1][i] = filtros.face[i][1].filter(arr[1][i], t);
+    _outFace[2][i] = filtros.face[i][2].filter(arr[2][i], t);
+  }
+  return _outFace;
+}
 function aplicarFrame(fIn, t) {
   const f = {
     pose: filtrarSubset(fIn.pose, filtros.pose, _outPose, t),
     pose_world: fIn.pose_world ? filtrarSubset(fIn.pose_world, filtros.pose_world, _outPoseW, t) : _POSE_VACIA,
     l_hand: filtrarMano(manoConContinuidad('l', fIn.l_hand, t), filtros.l_hand, _outLH, t),
     r_hand: filtrarMano(manoConContinuidad('r', fIn.r_hand, t), filtros.r_hand, _outRH, t),
+    face: fIn.face ? filtrarFace(fIn.face, t) : null,
   };
   if (!vrm || f.pose[0].length !== 33) return;
   if (!restDirs) calcularRest();
+  if (f.face) aplicarExpresion(f.face);
 
   const chest = vrm.humanoid.getNormalizedBoneNode('chest') || vrm.humanoid.getNormalizedBoneNode('spine');
   if (chest) {
@@ -388,6 +580,7 @@ const cache = {};
 const cola = [];
 let actualSign = null;
 let frameTime = 0;
+let ultimaSign = null;   // ultima seña reproducida, para repetir al ampliar
 
 const etiqueta = v => typeof v === 'string' ? v : v.label;
 const fuente   = v => (typeof v === 'object' && v.source) || 'LSCS45';
@@ -473,19 +666,57 @@ function renderVocab(filtro = '') {
   if (!claves.length) listaDiv.innerHTML = '<p style="color:#666;text-align:center;padding:40px">Sin coincidencias</p>';
 }
 
-(async () => {
-  indice = await (await fetch('signs/index.json')).json();
-  for (const k of Object.keys(indice)) lookup[normalizar(k)] = k;
+async function recargarIndice() {
+  const nuevo = await (await fetch('signs/index.json?t=' + Date.now())).json();
+  const claves = Object.keys(nuevo);
+  // Si el conteo cambia, re-renderizar
+  if (claves.length === Object.keys(indice).length &&
+      claves.every(k => k in indice)) return;
+  indice = nuevo;
+  lookup = {};
+  for (const k of claves) lookup[normalizar(k)] = k;
+  renderVocab(buscar.value.toLowerCase());
+  console.log(`[indice] ${claves.length} senas disponibles`);
+}
 
+(async () => {
+  await recargarIndice();
   const frasesDiv = document.getElementById('frasesChips');
   for (const f of FRASES_PRESET) {
     const claves = f.split(/\s+/).map(p => lookup[normalizar(p)]).filter(Boolean);
     if (claves.length === f.split(/\s+/).length) frasesDiv.appendChild(crearFrase(f));
   }
-  renderVocab();
+  setInterval(recargarIndice, 5000);
 })();
 
 buscar.addEventListener('input', e => renderVocab(e.target.value.toLowerCase()));
+
+// Modo comparacion: avatar y video grandes lado a lado
+const btnComparar = document.getElementById('btnComparar');
+const btnSalir = document.getElementById('btnSalir');
+function setComparar(activo) {
+  document.body.classList.toggle('comparando', activo);
+  btnComparar.style.display = activo ? 'none' : 'flex';
+  btnSalir.style.display = activo ? 'flex' : 'none';
+  setTimeout(() => {
+    ajustar();
+    // Al ampliar, repetir la ultima seña para poder analizarla en grande
+    if (activo && ultimaSign) {
+      cola.length = 0; actualSign = null;
+      cola.push(ultimaSign);
+      actualizarCola();
+    }
+  }, 260);
+}
+btnComparar.onclick = () => setComparar(true);
+btnSalir.onclick = () => setComparar(false);
+document.getElementById('btnRepetir').onclick = () => {
+  if (!ultimaSign) return;
+  cola.length = 0; actualSign = null;
+  cola.push(ultimaSign);
+  actualizarCola();
+};
+addEventListener('keydown', e => { if (e.key === 'Escape') setComparar(false); });
 
 // ---------- bucle ----------
 const reloj = new THREE.Clock();
@@ -497,6 +728,7 @@ function animar() {
 
   if (!actualSign && cola.length) {
     actualSign = cola.shift();
+    ultimaSign = actualSign;
     frameTime = 0;
     reiniciarSuavizado();
     actualizarCola();

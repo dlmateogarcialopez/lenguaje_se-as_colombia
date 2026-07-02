@@ -14,7 +14,20 @@ TIMESTAMPS = os.path.join(LSC50, "IMU", "INFO", "Timestamps.xlsx")
 LM_BODY = os.path.join(LSC50, "LANDMARKS", "BODY_LANDMARKS")
 LM_LEFT = os.path.join(LSC50, "LANDMARKS", "HANDS_LANDMARKS", "LEFT_HAND_LANDMARKS")
 LM_RIGHT = os.path.join(LSC50, "LANDMARKS", "HANDS_LANDMARKS", "RIGHT_HAND_LANDMARKS")
+LM_FACE = os.path.join(LSC50, "LANDMARKS", "FACE_LANDMARKS")
 VIDEOS_AVI = os.path.join(LSC50, "VIDEOS", "COLOR_BODY")
+
+# Indices del FaceMesh (468) que conserva el frontend (cejas, ojos, boca).
+# Debe coincidir con FACE_INDICES de extraer_videos.py / watcher.py.
+FACE_INDICES = [
+    70, 63, 105, 66, 107,
+    336, 296, 334, 293, 300,
+    159, 145, 33, 133,
+    386, 374, 263, 362,
+    13, 14, 78, 308,
+    17, 0,
+    61, 291,
+]
 
 OUT_SIGNS = os.path.join(BASE, "static", "signs")
 OUT_VIDEOS = os.path.join(BASE, "static", "videos")
@@ -91,6 +104,7 @@ def main():
         pose = leer_csv(os.path.join(LM_BODY, base + ".csv"))
         l_hand = leer_csv(os.path.join(LM_LEFT, base + ".csv"))
         r_hand = leer_csv(os.path.join(LM_RIGHT, base + ".csv"))
+        face_full = leer_csv(os.path.join(LM_FACE, base + ".csv"))
         avi = os.path.join(VIDEOS_AVI, base + ".avi")
 
         if not pose or not os.path.exists(avi):
@@ -100,10 +114,17 @@ def main():
         n_frames = len(pose)
         frames = []
         for i in range(n_frames):
+            face = [[], [], []]
+            if i < len(face_full) and len(face_full[i][0]) >= max(FACE_INDICES) + 1:
+                for idx in FACE_INDICES:
+                    face[0].append(face_full[i][0][idx])
+                    face[1].append(face_full[i][1][idx])
+                    face[2].append(face_full[i][2][idx])
             frames.append({
                 "pose": pose[i],
                 "l_hand": l_hand[i] if i < len(l_hand) else [[], [], []],
                 "r_hand": r_hand[i] if i < len(r_hand) else [[], [], []],
+                "face": face,
             })
 
         clave = slug(nombre)

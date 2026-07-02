@@ -43,3 +43,5 @@ Thumbs.db
 
 # Any WebApp local test artifacts
 webapp/lsc_motion_dummy.json
+
+/videos

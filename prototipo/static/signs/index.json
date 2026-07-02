@@ -1,1 +1,507 @@
-{"apoyar": {"label": "Apoyar", "video": null, "source": "LSCS45"}, "ayudar": {"label": "Ayudar", "video": null, "source": "LSCS45"}, "bano": {"label": "Baño", "video": null, "source": "LSCS45"}, "bien": {"label": "Bien", "video": "videos/bien.mp4", "source": "LSC50"}, "bienvenido": {"label": "Bienvenido", "video": "videos/bienvenido.mp4", "source": "LSC50"}, "aveces": {"label": "a veces", "video": "videos/aveces.m4v", "source": "LSCPROPIO"}, "abajo": {"label": "abajo", "video": "videos/abajo.m4v", "source": "LSCPROPIO"}, "abril": {"label": "abril", "video": "videos/abril.mp4", "source": "LSCPROPIO"}, "agosto": {"label": "agosto", "video": "videos/agosto.mp4", "source": "LSCPROPIO"}, "automatico": {"label": "automatico", "video": "videos/automatico.mp4", "source": "LSCPROPIO"}, "ano": {"label": "año", "video": "videos/ano.m4v", "source": "LSCPROPIO"}, "camara-fotografica": {"label": "camara-fotografica", "video": "videos/camara-fotografica.mp4", "source": "LSCPROPIO"}, "celular": {"label": "celular", "video": "videos/celular.mp4", "source": "LSCPROPIO"}, "computador": {"label": "computador", "video": "videos/computador.mp4", "source": "LSCPROPIO"}, "diciembre": {"label": "diciembre", "video": "videos/diciembre.mp4", "source": "LSCPROPIO"}, "domingo": {"label": "domingo", "video": "videos/domingo.m4v", "source": "LSCPROPIO"}, "encontrar": {"label": "encontrar", "video": "videos/encontrar.m4v", "source": "LSCPROPIO"}, "energia-electrica": {"label": "energia-electrica", "video": "videos/energia-electrica.mp4", "source": "LSCPROPIO"}, "enero": {"label": "enero", "video": "videos/enero.mp4", "source": "LSCPROPIO"}, "escoger": {"label": "escoger", "video": "videos/escoger.mp4", "source": "LSCPROPIO"}, "febrero": {"label": "febrero", "video": "videos/febrero.mp4", "source": "LSCPROPIO"}, "fecha": {"label": "fecha", "video": "videos/fecha.mp4", "source": "LSCPROPIO"}, "impresora": {"label": "impresora", "video": "videos/impresora.mp4", "source": "LSCPROPIO"}, "internet": {"label": "internet", "video": "videos/internet.mp4", "source": "LSCPROPIO"}, "interpretar": {"label": "interpretar", "video": "videos/interpretar.mp4", "source": "LSCPROPIO"}, "jueves": {"label": "jueves", "video": "videos/jueves.m4v", "source": "LSCPROPIO"}, "julio": {"label": "julio", "video": "videos/julio.mp4", "source": "LSCPROPIO"}, "junio": {"label": "junio", "video": "videos/junio.mp4", "source": "LSCPROPIO"}, "lunes": {"label": "lunes", "video": "videos/lunes.m4v", "source": "LSCPROPIO"}, "martes": {"label": "martes", "video": "videos/martes.m4v", "source": "LSCPROPIO"}, "marzo": {"label": "marzo", "video": "videos/marzo.mp4", "source": "LSCPROPIO"}, "mayo": {"label": "mayo", "video": "videos/mayo.mp4", "source": "LSCPROPIO"}, "mes": {"label": "mes", "video": "videos/mes.mp4", "source": "LSCPROPIO"}, "miercoles": {"label": "miercoles", "video": "videos/miercoles.m4v", "source": "LSCPROPIO"}, "noviembre": {"label": "noviembre", "video": "videos/noviembre.mp4", "source": "LSCPROPIO"}, "octubre": {"label": "octubre", "video": "videos/octubre.mp4", "source": "LSCPROPIO"}, "pagar": {"label": "pagar", "video": "videos/pagar.mp4", "source": "LSCPROPIO"}, "parecer": {"label": "parecer", "video": "videos/parecer.m4v", "source": "LSCPROPIO"}, "participar": {"label": "participar", "video": "videos/participar.m4v", "source": "LSCPROPIO"}, "pedir": {"label": "pedir", "video": "videos/pedir.m4v", "source": "LSCPROPIO"}, "poder": {"label": "poder", "video": "videos/poder.m4v", "source": "LSCPROPIO"}, "precio": {"label": "precio", "video": "videos/precio.mp4", "source": "LSCPROPIO"}, "sabado": {"label": "sabado", "video": "videos/sabado.m4v", "source": "LSCPROPIO"}, "septiembre": {"label": "septiembre", "video": "videos/septiembre.mp4", "source": "LSCPROPIO"}, "telefono": {"label": "telefono", "video": "videos/telefono.mp4", "source": "LSCPROPIO"}, "television": {"label": "television", "video": "videos/television.mp4", "source": "LSCPROPIO"}, "tiempo": {"label": "tiempo", "video": "videos/tiempo.m4v", "source": "LSCPROPIO"}, "viernes": {"label": "viernes", "video": "videos/viernes.m4v", "source": "LSCPROPIO"}, "visitar": {"label": "visitar", "video": "videos/visitar.m4v", "source": "LSCPROPIO"}, "gracias": {"label": "Gracias", "video": "videos/gracias.mp4", "source": "LSC50"}, "buenosdias": {"label": "Buenos Días", "video": "videos/buenosdias.mp4", "source": "LSC50"}, "buenastardes": {"label": "Buenas Tardes", "video": "videos/buenastardes.mp4", "source": "LSC50"}, "buenasnoches": {"label": "Buenas Noches", "video": "videos/buenasnoches.mp4", "source": "LSC50"}, "sena": {"label": "Seña", "video": "videos/sena.mp4", "source": "LSC50"}, "nombre": {"label": "Nombre", "video": "videos/nombre.mp4", "source": "LSC50"}, "trabajar": {"label": "Trabajar", "video": "videos/trabajar.mp4", "source": "LSC50"}, "comer": {"label": "Comer", "video": "videos/comer.mp4", "source": "LSC50"}, "vivir": {"label": "Vivir", "video": "videos/vivir.mp4", "source": "LSC50"}, "poco": {"label": "Poco", "video": "videos/poco.mp4", "source": "LSC50"}, "familia": {"label": "Familia", "video": "videos/familia.mp4", "source": "LSC50"}, "personas": {"label": "Personas", "video": "videos/personas.mp4", "source": "LSC50"}, "mujer": {"label": "Mujer", "video": "videos/mujer.mp4", "source": "LSC50"}, "hombre": {"label": "Hombre", "video": "videos/hombre.mp4", "source": "LSC50"}, "nino": {"label": "Niño", "video": "videos/nino.mp4", "source": "LSC50"}, "nina": {"label": "Niña", "video": "videos/nina.mp4", "source": "LSC50"}, "abuelo": {"label": "Abuelo", "video": "videos/abuelo.mp4", "source": "LSC50"}, "tio": {"label": "Tío", "video": "videos/tio.mp4", "source": "LSC50"}, "hermano": {"label": "Hermano", "video": "videos/hermano.mp4", "source": "LSC50"}, "hambre": {"label": "Hambre", "video": "videos/hambre.mp4", "source": "LSC50"}, "feliz": {"label": "Feliz", "video": "videos/feliz.mp4", "source": "LSC50"}, "contento": {"label": "Contento", "video": "videos/contento.mp4", "source": "LSC50"}, "triste": {"label": "Triste", "video": "videos/triste.mp4", "source": "LSC50"}, "aburrido": {"label": "Aburrido", "video": "videos/aburrido.mp4", "source": "LSC50"}, "mal": {"label": "Mal", "video": "videos/mal.mp4", "source": "LSC50"}, "comoestas": {"label": "¿Cómo estas?", "video": "videos/comoestas.mp4", "source": "LSC50"}, "masomenos": {"label": "Más o menos", "video": "videos/masomenos.mp4", "source": "LSC50"}, "sentir": {"label": "Sentir", "video": "videos/sentir.mp4", "source": "LSC50"}, "jucioso": {"label": "Jucioso", "video": "videos/jucioso.mp4", "source": "LSC50"}, "hola": {"label": "Hola", "video": "videos/hola.mp4", "source": "LSC50"}, "adios": {"label": "Adiós", "video": "videos/adios.mp4", "source": "LSC50"}, "porfavor": {"label": "Por favor", "video": "videos/porfavor.mp4", "source": "LSC50"}, "congusto": {"label": "Con Gusto", "video": "videos/congusto.mp4", "source": "LSC50"}, "perdon": {"label": "Perdón", "video": "videos/perdon.mp4", "source": "LSC50"}, "permiso": {"label": "Permiso", "video": "videos/permiso.mp4", "source": "LSC50"}, "nunca": {"label": "Nunca", "video": "videos/nunca.mp4", "source": "LSC50"}, "yo": {"label": "Yo", "video": "videos/yo.mp4", "source": "LSC50"}, "tu": {"label": "Tú", "video": "videos/tu.mp4", "source": "LSC50"}, "ustedes": {"label": "Ustedes", "video": "videos/ustedes.mp4", "source": "LSC50"}, "que": {"label": "¿Qué?", "video": "videos/que.mp4", "source": "LSC50"}, "cuando": {"label": "¿Cuándo?", "video": "videos/cuando.mp4", "source": "LSC50"}, "donde": {"label": "¿Dónde?", "video": "videos/donde.mp4", "source": "LSC50"}, "como": {"label": "¿Cómo?", "video": "videos/como.mp4", "source": "LSC50"}, "porque": {"label": "¿Por qué?", "video": "videos/porque.mp4", "source": "LSC50"}, "quien": {"label": "¿Quién?", "video": "videos/quien.mp4", "source": "LSC50"}, "diferente": {"label": "Diferente", "video": "videos/diferente.mp4", "source": "LSC50"}, "todos": {"label": "Todos", "video": "videos/todos.mp4", "source": "LSC50"}, "mucho": {"label": "Mucho", "video": "videos/mucho.mp4", "source": "LSC50"}}
+{
+  "apoyar": {
+    "label": "Apoyar",
+    "video": null,
+    "source": "LSCS45"
+  },
+  "ayudar": {
+    "label": "Ayudar",
+    "video": null,
+    "source": "LSCS45"
+  },
+  "bano": {
+    "label": "Baño",
+    "video": null,
+    "source": "LSCS45"
+  },
+  "bien": {
+    "label": "Bien",
+    "video": "videos/bien.mp4",
+    "source": "LSC50"
+  },
+  "bienvenido": {
+    "label": "Bienvenido",
+    "video": "videos/bienvenido.mp4",
+    "source": "LSC50"
+  },
+  "aveces": {
+    "label": "a veces",
+    "video": "videos/aveces.m4v",
+    "source": "LSCPROPIO"
+  },
+  "abajo": {
+    "label": "abajo",
+    "video": "videos/abajo.m4v",
+    "source": "LSCPROPIO"
+  },
+  "abril": {
+    "label": "abril",
+    "video": "videos/abril.mp4",
+    "source": "LSCPROPIO"
+  },
+  "agosto": {
+    "label": "agosto",
+    "video": "videos/agosto.mp4",
+    "source": "LSCPROPIO"
+  },
+  "automatico": {
+    "label": "automatico",
+    "video": "videos/automatico.mp4",
+    "source": "LSCPROPIO"
+  },
+  "ano": {
+    "label": "año",
+    "video": "videos/ano.m4v",
+    "source": "LSCPROPIO"
+  },
+  "camara-fotografica": {
+    "label": "camara-fotografica",
+    "video": "videos/camara-fotografica.mp4",
+    "source": "LSCPROPIO"
+  },
+  "celular": {
+    "label": "celular",
+    "video": "videos/celular.mp4",
+    "source": "LSCPROPIO"
+  },
+  "computador": {
+    "label": "computador",
+    "video": "videos/computador.mp4",
+    "source": "LSCPROPIO"
+  },
+  "diciembre": {
+    "label": "diciembre",
+    "video": "videos/diciembre.mp4",
+    "source": "LSCPROPIO"
+  },
+  "domingo": {
+    "label": "domingo",
+    "video": "videos/domingo.m4v",
+    "source": "LSCPROPIO"
+  },
+  "encontrar": {
+    "label": "encontrar",
+    "video": "videos/encontrar.m4v",
+    "source": "LSCPROPIO"
+  },
+  "energia-electrica": {
+    "label": "energia-electrica",
+    "video": "videos/energia-electrica.mp4",
+    "source": "LSCPROPIO"
+  },
+  "enero": {
+    "label": "enero",
+    "video": "videos/enero.mp4",
+    "source": "LSCPROPIO"
+  },
+  "escoger": {
+    "label": "escoger",
+    "video": "videos/escoger.mp4",
+    "source": "LSCPROPIO"
+  },
+  "febrero": {
+    "label": "febrero",
+    "video": "videos/febrero.mp4",
+    "source": "LSCPROPIO"
+  },
+  "fecha": {
+    "label": "fecha",
+    "video": "videos/fecha.mp4",
+    "source": "LSCPROPIO"
+  },
+  "impresora": {
+    "label": "impresora",
+    "video": "videos/impresora.mp4",
+    "source": "LSCPROPIO"
+  },
+  "internet": {
+    "label": "internet",
+    "video": "videos/internet.mp4",
+    "source": "LSCPROPIO"
+  },
+  "interpretar": {
+    "label": "interpretar",
+    "video": "videos/interpretar.mp4",
+    "source": "LSCPROPIO"
+  },
+  "jueves": {
+    "label": "jueves",
+    "video": "videos/jueves.m4v",
+    "source": "LSCPROPIO"
+  },
+  "julio": {
+    "label": "julio",
+    "video": "videos/julio.mp4",
+    "source": "LSCPROPIO"
+  },
+  "junio": {
+    "label": "junio",
+    "video": "videos/junio.mp4",
+    "source": "LSCPROPIO"
+  },
+  "lunes": {
+    "label": "lunes",
+    "video": "videos/lunes.m4v",
+    "source": "LSCPROPIO"
+  },
+  "martes": {
+    "label": "martes",
+    "video": "videos/martes.m4v",
+    "source": "LSCPROPIO"
+  },
+  "marzo": {
+    "label": "marzo",
+    "video": "videos/marzo.mp4",
+    "source": "LSCPROPIO"
+  },
+  "mayo": {
+    "label": "mayo",
+    "video": "videos/mayo.mp4",
+    "source": "LSCPROPIO"
+  },
+  "mes": {
+    "label": "mes",
+    "video": "videos/mes.mp4",
+    "source": "LSCPROPIO"
+  },
+  "miercoles": {
+    "label": "miercoles",
+    "video": "videos/miercoles.m4v",
+    "source": "LSCPROPIO"
+  },
+  "noviembre": {
+    "label": "noviembre",
+    "video": "videos/noviembre.mp4",
+    "source": "LSCPROPIO"
+  },
+  "octubre": {
+    "label": "octubre",
+    "video": "videos/octubre.mp4",
+    "source": "LSCPROPIO"
+  },
+  "pagar": {
+    "label": "pagar",
+    "video": "videos/pagar.mp4",
+    "source": "LSCPROPIO"
+  },
+  "parecer": {
+    "label": "parecer",
+    "video": "videos/parecer.m4v",
+    "source": "LSCPROPIO"
+  },
+  "participar": {
+    "label": "participar",
+    "video": "videos/participar.m4v",
+    "source": "LSCPROPIO"
+  },
+  "pedir": {
+    "label": "pedir",
+    "video": "videos/pedir.m4v",
+    "source": "LSCPROPIO"
+  },
+  "poder": {
+    "label": "poder",
+    "video": "videos/poder.m4v",
+    "source": "LSCPROPIO"
+  },
+  "precio": {
+    "label": "precio",
+    "video": "videos/precio.mp4",
+    "source": "LSCPROPIO"
+  },
+  "sabado": {
+    "label": "sabado",
+    "video": "videos/sabado.m4v",
+    "source": "LSCPROPIO"
+  },
+  "septiembre": {
+    "label": "septiembre",
+    "video": "videos/septiembre.mp4",
+    "source": "LSCPROPIO"
+  },
+  "telefono": {
+    "label": "telefono",
+    "video": "videos/telefono.mp4",
+    "source": "LSCPROPIO"
+  },
+  "television": {
+    "label": "television",
+    "video": "videos/television.mp4",
+    "source": "LSCPROPIO"
+  },
+  "tiempo": {
+    "label": "tiempo",
+    "video": "videos/tiempo.m4v",
+    "source": "LSCPROPIO"
+  },
+  "viernes": {
+    "label": "viernes",
+    "video": "videos/viernes.m4v",
+    "source": "LSCPROPIO"
+  },
+  "visitar": {
+    "label": "visitar",
+    "video": "videos/visitar.m4v",
+    "source": "LSCPROPIO"
+  },
+  "gracias": {
+    "label": "Gracias",
+    "video": "videos/gracias.mp4",
+    "source": "LSC50"
+  },
+  "buenosdias": {
+    "label": "Buenos Días",
+    "video": "videos/buenosdias.mp4",
+    "source": "LSC50"
+  },
+  "buenastardes": {
+    "label": "Buenas Tardes",
+    "video": "videos/buenastardes.mp4",
+    "source": "LSC50"
+  },
+  "buenasnoches": {
+    "label": "Buenas Noches",
+    "video": "videos/buenasnoches.mp4",
+    "source": "LSC50"
+  },
+  "sena": {
+    "label": "Seña",
+    "video": "videos/sena.mp4",
+    "source": "LSC50"
+  },
+  "nombre": {
+    "label": "Nombre",
+    "video": "videos/nombre.mp4",
+    "source": "LSC50"
+  },
+  "trabajar": {
+    "label": "Trabajar",
+    "video": "videos/trabajar.mp4",
+    "source": "LSC50"
+  },
+  "comer": {
+    "label": "Comer",
+    "video": "videos/comer.mp4",
+    "source": "LSC50"
+  },
+  "vivir": {
+    "label": "Vivir",
+    "video": "videos/vivir.mp4",
+    "source": "LSC50"
+  },
+  "poco": {
+    "label": "Poco",
+    "video": "videos/poco.mp4",
+    "source": "LSC50"
+  },
+  "familia": {
+    "label": "Familia",
+    "video": "videos/familia.mp4",
+    "source": "LSC50"
+  },
+  "personas": {
+    "label": "Personas",
+    "video": "videos/personas.mp4",
+    "source": "LSC50"
+  },
+  "mujer": {
+    "label": "Mujer",
+    "video": "videos/mujer.mp4",
+    "source": "LSC50"
+  },
+  "hombre": {
+    "label": "Hombre",
+    "video": "videos/hombre.mp4",
+    "source": "LSC50"
+  },
+  "nino": {
+    "label": "Niño",
+    "video": "videos/nino.mp4",
+    "source": "LSC50"
+  },
+  "nina": {
+    "label": "Niña",
+    "video": "videos/nina.mp4",
+    "source": "LSC50"
+  },
+  "abuelo": {
+    "label": "Abuelo",
+    "video": "videos/abuelo.mp4",
+    "source": "LSC50"
+  },
+  "tio": {
+    "label": "Tío",
+    "video": "videos/tio.mp4",
+    "source": "LSC50"
+  },
+  "hermano": {
+    "label": "Hermano",
+    "video": "videos/hermano.mp4",
+    "source": "LSC50"
+  },
+  "hambre": {
+    "label": "Hambre",
+    "video": "videos/hambre.mp4",
+    "source": "LSC50"
+  },
+  "feliz": {
+    "label": "Feliz",
+    "video": "videos/feliz.mp4",
+    "source": "LSC50"
+  },
+  "contento": {
+    "label": "Contento",
+    "video": "videos/contento.mp4",
+    "source": "LSC50"
+  },
+  "triste": {
+    "label": "Triste",
+    "video": "videos/triste.mp4",
+    "source": "LSC50"
+  },
+  "aburrido": {
+    "label": "Aburrido",
+    "video": "videos/aburrido.mp4",
+    "source": "LSC50"
+  },
+  "mal": {
+    "label": "Mal",
+    "video": "videos/mal.mp4",
+    "source": "LSC50"
+  },
+  "comoestas": {
+    "label": "¿Cómo estas?",
+    "video": "videos/comoestas.mp4",
+    "source": "LSC50"
+  },
+  "masomenos": {
+    "label": "Más o menos",
+    "video": "videos/masomenos.mp4",
+    "source": "LSC50"
+  },
+  "sentir": {
+    "label": "Sentir",
+    "video": "videos/sentir.mp4",
+    "source": "LSC50"
+  },
+  "jucioso": {
+    "label": "Jucioso",
+    "video": "videos/jucioso.mp4",
+    "source": "LSC50"
+  },
+  "hola": {
+    "label": "Hola",
+    "video": "videos/hola.mp4",
+    "source": "LSC50"
+  },
+  "adios": {
+    "label": "Adiós",
+    "video": "videos/adios.mp4",
+    "source": "LSC50"
+  },
+  "porfavor": {
+    "label": "Por favor",
+    "video": "videos/porfavor.mp4",
+    "source": "LSC50"
+  },
+  "congusto": {
+    "label": "Con Gusto",
+    "video": "videos/congusto.mp4",
+    "source": "LSC50"
+  },
+  "perdon": {
+    "label": "Perdón",
+    "video": "videos/perdon.mp4",
+    "source": "LSC50"
+  },
+  "permiso": {
+    "label": "Permiso",
+    "video": "videos/permiso.mp4",
+    "source": "LSC50"
+  },
+  "nunca": {
+    "label": "Nunca",
+    "video": "videos/nunca.mp4",
+    "source": "LSC50"
+  },
+  "yo": {
+    "label": "Yo",
+    "video": "videos/yo.mp4",
+    "source": "LSC50"
+  },
+  "tu": {
+    "label": "Tú",
+    "video": "videos/tu.mp4",
+    "source": "LSC50"
+  },
+  "ustedes": {
+    "label": "Ustedes",
+    "video": "videos/ustedes.mp4",
+    "source": "LSC50"
+  },
+  "que": {
+    "label": "¿Qué?",
+    "video": "videos/que.mp4",
+    "source": "LSC50"
+  },
+  "cuando": {
+    "label": "¿Cuándo?",
+    "video": "videos/cuando.mp4",
+    "source": "LSC50"
+  },
+  "donde": {
+    "label": "¿Dónde?",
+    "video": "videos/donde.mp4",
+    "source": "LSC50"
+  },
+  "como": {
+    "label": "¿Cómo?",
+    "video": "videos/como.mp4",
+    "source": "LSC50"
+  },
+  "porque": {
+    "label": "¿Por qué?",
+    "video": "videos/porque.mp4",
+    "source": "LSC50"
+  },
+  "quien": {
+    "label": "¿Quién?",
+    "video": "videos/quien.mp4",
+    "source": "LSC50"
+  },
+  "diferente": {
+    "label": "Diferente",
+    "video": "videos/diferente.mp4",
+    "source": "LSC50"
+  },
+  "todos": {
+    "label": "Todos",
+    "video": "videos/todos.mp4",
+    "source": "LSC50"
+  },
+  "mucho": {
+    "label": "Mucho",
+    "video": "videos/mucho.mp4",
+    "source": "LSC50"
+  },
+  "camarafotografica": {
+    "label": "camara-fotografica",
+    "video": "videos/camarafotografica.mp4",
+    "source": "LSCPROPIO"
+  },
+  "energiaelectrica": {
+    "label": "energia-electrica",
+    "video": "videos/energiaelectrica.mp4",
+    "source": "LSCPROPIO"
+  },
+  "pruebawatcher": {
+    "label": "prueba_watcher",
+    "video": "videos/pruebawatcher.mp4",
+    "source": "LSCPROPIO"
+  },
+  "computadortodoenuno": {
+    "label": "computador_todo_en_uno",
+    "video": "videos/computadortodoenuno.mp4",
+    "source": "LSCPROPIO"
+  }
+}

@@ -10,7 +10,17 @@
       "Bash(curl -L --ssl-no-revoke -o static/avatar.vrm \"https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm\")",
       "Bash(powershell -Command ' *)",
       "Bash(curl -s -o /dev/null -w \"video lunes: %{http_code}\\\\n\" http://localhost:8765/videos/lunes.m4v -r 0-100)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "WebSearch",
+      "WebFetch(domain:educativo.insor.gov.co)",
+      "WebFetch(domain:spreadthesign.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.spreadthesign.com)",
+      "WebFetch(domain:contenidos.colombiaaprende.edu.co)",
+      "Bash(yt-dlp --version)",
+      "Bash(powershell -Command \"Get-Command yt-dlp -ErrorAction SilentlyContinue\")",
+      "Bash(yt-dlp --no-check-certificate --get-url \"https://educativo.insor.gov.co/diccionario/\")",
+      "Bash(yt-dlp --no-check-certificate \"ytsearch3:lengua de senas colombiana hola fenascol\" --get-id --get-title)"
     ]
   }
 }
